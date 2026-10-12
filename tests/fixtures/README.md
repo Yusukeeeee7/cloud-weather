@@ -14,6 +14,24 @@
 https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&timezone=<タイムゾーン>&timeformat=unixtime
 ```
 
+## 太陽計算（#7 日照）の期待値
+
+`/daylight` は外部APIを呼ばない。下のファイルは、計算結果を比べる相手として 1 回だけ取得したもの。
+読み出しは `tests/solar_refs.py` にまとめている。
+
+| ファイル | 取得日時（UTC） | 取得方法・内容 |
+|---|---|---|
+| `open_meteo/sun_<city>_16days.json` | 2026-10-12T20:25:16Z | `curl`、`api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&daily=sunrise,sunset&forecast_days=16&timezone=<タイムゾーン>&timeformat=unixtime`。ベルリンは夏時間が終わる日（2026-10-25）を含む |
+| `open_meteo/archive_sun_<city>.json` | 2026-10-12T20:25:17Z | `curl`、`archive-api.open-meteo.com/v1/archive?latitude=<緯度>&longitude=<経度>&daily=sunrise,sunset&start_date=2025-12-21&end_date=2026-06-21&timezone=<タイムゾーン>&timeformat=unixtime`。冬至（2025-12-21）・春分（2026-03-20）・夏至（2026-06-21）と、ベルリンの夏時間が始まる日（2026-03-29）を含む 183 日 |
+| `usno/year_2026_<city>_<civil\|nautical\|astronomical>.html` | 2026-10-12T20:25:26Z〜38Z | `curl`、`aa.usno.navy.mil/calculated/rstt/year?ID=AA&year=2026&task=<2\|3\|4>&lat=<緯度>&lon=<経度>&label=<名前>&tz=<9\|1>&tz_sign=1&submit=Get+Data`。米国海軍天文台（USNO）の薄明の表。**分単位、現地の標準時**（東京 UTC+9、ベルリン UTC+1。夏時間ではない）。`////` はその高度まで沈まない日 |
+| `usno/oneday_<city>_<日付>.json` | 同上 | `curl`、`aa.usno.navy.mil/api/rstt/oneday?date=<日付>&coords=<緯度>,<経度>&tz=0`。南中（Upper Transit）を使う。**分単位、UT** |
+| `noaa/solar_calculations_day.json` | 2026-10-12（ファイルの取得） | `gml.noaa.gov/grad/solcalc/NOAA_Solar_Calculations_day.ods` の「Calculations」シートから、入力セル・1 行目の式・**NOAA が計算して保存していた値**（北緯 40°・西経 105°・UTC−7・2010-06-21 の 6 分おき 240 行）を取り出したもの。値は変えていない。元の .ods（約 250 KB）はリポジトリに入れていない |
+
+- Open-Meteo の応答は取得したまま。USNO の HTML も取得したまま（表の部分だけをテストで読む）。
+- USNO の表の `ID=AA` は画面の既定値をそのまま使った。USNO の API の説明は「AA は内部用なので避ける」としているので、取り直すときは別の ID にする。
+- Open-Meteo の応答に入っている緯度・経度は、送った値（spec の値）と少し違う（格子点の座標）。計算は spec の値で行う。
+- 出典：USNO Astronomical Applications Department（https://aa.usno.navy.mil/）、NOAA Global Monitoring Laboratory（https://gml.noaa.gov/grad/solcalc/）。
+
 ## 2 種類ある理由
 
 - `forecast_<city>.json`：アプリが実際に受け取る形（時刻が UNIX 秒）。

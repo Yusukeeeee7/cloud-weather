@@ -64,6 +64,33 @@ class WeatherResponse(BaseModel):
     stale: bool
 
 
+class TwilightPeriod(BaseModel):
+    # 太陽がその高度まで沈まない（または昇らない）日は null。
+    dawn: datetime | None
+    dusk: datetime | None
+
+
+class Twilight(BaseModel):
+    civil: TwilightPeriod
+    nautical: TwilightPeriod
+    astronomical: TwilightPeriod
+
+
+class DaylightResponse(BaseModel):
+    city: str
+    # 現地の日付。時刻はすべて UTC。
+    date: dt.date
+    sunrise: datetime | None
+    sunset: datetime | None
+    twilight: Twilight
+    daylight_hours: float
+    night_hours: float
+    dark_hours: float
+    solar_noon: datetime
+    solar_noon_elevation_deg: float
+    method: Literal["noaa-solar-calculator"]
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

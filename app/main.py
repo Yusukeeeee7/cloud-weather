@@ -8,7 +8,7 @@ from app.clients.open_meteo import OpenMeteoClient, build_http_client
 from app.config import get_settings
 from app.errors import register_exception_handlers
 from app.logging_config import configure_logging
-from app.routers import health, weather
+from app.routers import daylight, health, weather
 
 
 @asynccontextmanager
@@ -28,4 +28,5 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="cloud-weather", lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(health.router)
+app.include_router(daylight.router)
 app.include_router(weather.router)
