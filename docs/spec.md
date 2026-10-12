@@ -54,6 +54,11 @@ GitHub Actions（schedule）──> コンテナ実行 ──> Discord Webhook
 
 `{"status": "ok"}` を返す。
 
+### API ドキュメント（自動生成）
+
+FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.json` を公開する。
+開発中の動作確認に使うためで、内容はコードから生成される（手で書かない）。
+
 ### `GET /weather?city=tokyo`
 
 天気アプリとして使えるよう、現在・24時間（1時間ごと）・7日間（日ごと）を返す。
@@ -294,7 +299,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | # | 機能 | 受け入れ条件 | 状態 |
 |---|---|---|---|
-| 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 未着手 |
+| 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 完了 |
 | 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 未着手 |
 | 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 未着手 |
 | 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 未着手 |
