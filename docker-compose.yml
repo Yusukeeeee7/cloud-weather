@@ -1,0 +1,24 @@
+# 手元で API と Redis をまとめて起動する（本番用ではない）。
+services:
+  api:
+    build: .
+    ports:
+      # 手元のマシンからだけ見えるようにする。
+      - "127.0.0.1:8000:8000"
+    environment:
+      CACHE_BACKEND: redis
+      # compose の中だけで通じる接続先（パスワードなし）。秘密の値はここに書かない。
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    # 版を固定する（2026-10-12 に Docker Hub の公式イメージ一覧で確認）。
+    image: redis:8.10.2-alpine
+    # ポートはホストに公開しない。api からだけ compose のネットワーク経由で使う。
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

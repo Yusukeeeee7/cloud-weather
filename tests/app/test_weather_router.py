@@ -1,17 +1,28 @@
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+import fakeredis
 import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from tests.conftest import FORECAST_URL, RawForecast
+from app.cache import Cache, MemoryCache, RedisCache
+from tests.conftest import FIXED_NOW, FORECAST_URL, FakeClock, RawForecast
 
 UTC_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 LOCAL_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-TOP_LEVEL_KEYS = {"city", "timezone", "current", "hourly", "daily", "source", "fetched_at"}
+TOP_LEVEL_KEYS = {
+    "city",
+    "timezone",
+    "current",
+    "hourly",
+    "daily",
+    "source",
+    "fetched_at",
+    "cached",
+}
 HOURLY_KEYS = {
     "time",
     "weather_code",
@@ -113,7 +124,8 @@ def test_weather_returns_hourly_and_daily_shape(
         assert set(item["cloud_cover"]) == {"total", "low", "mid", "high"}
     for item in body["daily"]:
         assert set(item) == DAILY_KEYS
-    assert "cached" not in body
+    # cached は #5 で追加。stale は #6 まで返さない。
+    assert body["cached"] is False
     assert "stale" not in body
     assert route.call_count == 1
 
@@ -230,3 +242,195 @@ def test_openapi_documents_error_format(client: TestClient, status: str) -> None
     documented = schema["paths"]["/weather"]["get"]["responses"][status]
     ref = documented["content"]["application/json"]["schema"]["$ref"]
     assert ref == "#/components/schemas/ErrorResponse"
+
+
+class _RecordingCache:
+    """読み書きされたキーを記録するキャッシュ。"""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    async def get(self, key: str) -> str | None:
+        self.calls.append(("get", key))
+        return None
+
+    async def set(self, key: str, value: str, expire_s: int) -> None:
+        self.calls.append(("set", key))
+
+    async def close(self) -> None:
+        return None
+
+
+def _use_cache(cache: Cache) -> None:
+    from app.main import app
+    from app.routers.weather import get_cache
+
+    app.dependency_overrides[get_cache] = lambda: cache
+
+
+def _use_clock(clock: FakeClock) -> None:
+    from app.main import app
+    from app.routers.weather import get_clock
+
+    app.dependency_overrides[get_clock] = lambda: clock
+
+
+def _build_backend(backend: str) -> Cache | None:
+    if backend == "redis":
+        # 実物の Redis は使わない。保存先を替えても API の動きが同じことを確かめる。
+        return RedisCache(fakeredis.FakeAsyncRedis(decode_responses=True))
+    # None のときは、アプリが既定の設定で作ったキャッシュ（メモリ）をそのまま使う。
+    return None
+
+
+@pytest.mark.parametrize("backend", ["default", "redis"])
+@pytest.mark.parametrize("city", ["tokyo", "berlin"])
+def test_weather_second_request_is_cached(
+    client: TestClient,
+    open_meteo: respx.MockRouter,
+    forecast: Callable[[str], RawForecast],
+    city: str,
+    backend: str,
+) -> None:
+    route = _mock_ok(open_meteo, forecast(city))
+    cache = _build_backend(backend)
+    if cache is not None:
+        _use_cache(cache)
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+
+    first = client.get("/weather", params={"city": city})
+    clock.now = FIXED_NOW + timedelta(minutes=5)
+    second = client.get("/weather", params={"city": city})
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert route.call_count == 1
+    assert first.json()["cached"] is False
+    assert second.json()["cached"] is True
+    assert second.json()["fetched_at"] == first.json()["fetched_at"] == "2026-10-12T15:02:30Z"
+    assert second.json()["current"] == first.json()["current"]
+    assert second.json()["daily"] == first.json()["daily"]
+
+
+def test_weather_default_cache_is_memory(client: TestClient) -> None:
+    from app.main import app
+
+    assert isinstance(app.state.weather_cache, MemoryCache)
+
+
+def test_weather_refetches_after_ttl(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    # 既定の TTL（15 分）ちょうど。
+    clock.now = FIXED_NOW + timedelta(minutes=15)
+    body = client.get("/weather", params={"city": "tokyo"}).json()
+
+    assert route.call_count == 2
+    assert body["cached"] is False
+    assert body["fetched_at"] == "2026-10-12T15:17:30Z"
+
+
+def test_weather_cached_response_keeps_spec_shape(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    _mock_ok(open_meteo, forecast("tokyo"))
+    client.get("/weather", params={"city": "tokyo"})
+
+    body = client.get("/weather", params={"city": "tokyo"}).json()
+
+    assert body["cached"] is True
+    assert set(body) == TOP_LEVEL_KEYS
+    assert "stale" not in body
+    assert len(body["hourly"]) == 24
+    assert len(body["daily"]) == 7
+    assert UTC_Z.match(body["fetched_at"])
+
+
+def test_weather_uses_city_key(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    _mock_ok(open_meteo, forecast("berlin"))
+    cache = _RecordingCache()
+    _use_cache(cache)
+
+    client.get("/weather", params={"city": "berlin"})
+
+    # キーは spec.md「6. キャッシュ」の weather:{city}。
+    assert cache.calls == [("get", "weather:berlin"), ("set", "weather:berlin")]
+
+
+@pytest.mark.parametrize("city", ["osaka", "Tokyo", "", "weather:tokyo", "tokyo\nberlin", "*"])
+def test_weather_invalid_city_does_not_touch_cache(
+    client: TestClient, open_meteo: respx.MockRouter, city: str
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(200, json={}))
+    cache = _RecordingCache()
+    _use_cache(cache)
+
+    response = client.get("/weather", params={"city": city})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_city"
+    assert cache.calls == []
+    assert route.call_count == 0
+
+
+def test_weather_upstream_error_then_success(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(
+        side_effect=[httpx.Response(500), httpx.Response(200, json=forecast("tokyo"))]
+    )
+
+    failed = client.get("/weather", params={"city": "tokyo"})
+    recovered = client.get("/weather", params={"city": "tokyo"})
+
+    # 失敗は保存されないので、外部APIが直れば次のリクエストで 200 になる。
+    assert failed.status_code == 502
+    assert recovered.status_code == 200
+    assert recovered.json()["cached"] is False
+    assert route.call_count == 2
+
+
+def test_weather_cache_failure_still_returns_200(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    # キャッシュが故障しても API は止めない（2026-10-12 決定）。
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    server = fakeredis.FakeServer()
+    server.connected = False
+    _use_cache(RedisCache(fakeredis.FakeAsyncRedis(server=server, decode_responses=True)))
+
+    first = client.get("/weather", params={"city": "tokyo"})
+    second = client.get("/weather", params={"city": "tokyo"})
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert (first.json()["cached"], second.json()["cached"]) == (False, False)
+    assert route.call_count == 2
+
+
+def test_weather_uses_configured_ttl(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    # CACHE_TTL_S の値が、リクエストの処理まで届くこと（既定の 900 秒の直書きにならない）。
+    from app.config import Settings, get_settings
+    from app.main import app
+
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, cache_ttl_s=60)
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    clock.now = FIXED_NOW + timedelta(seconds=59)
+    hit = client.get("/weather", params={"city": "tokyo"}).json()
+    clock.now = FIXED_NOW + timedelta(seconds=60)
+    miss = client.get("/weather", params={"city": "tokyo"}).json()
+
+    assert (hit["cached"], miss["cached"]) == (True, False)
+    assert route.call_count == 2
