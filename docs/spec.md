@@ -111,24 +111,27 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
 ```
 
 - `hourly` は現在時刻以降の 24 件、`daily` は今日から 7 日分。
+- `city` を省略した場合は `tokyo` として扱う（2026-10-12 決定。使い始めやすくするため）。空文字（`city=`）は省略とは扱わず 422 `invalid_city`。
+- `current` の項目が Open-Meteo の応答に欠けている・null の場合は 502 `upstream_error`（一部だけ null で返さない。2026-10-12 決定）。
+- 機能ごとに段階的に追加する：#3 で `city`・`timezone`・`current`・`source`・`fetched_at`、#4 で `hourly`・`daily`。`cached`・`stale` をどの機能で追加するかは #5・#6 の計画で決める。未実装のキーは返さない。
 - 上の数値は形式を示す例で、実在の観測値ではない。
 
 **天気の分類（`weather`）**
 
 Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱いやすい分類に変換する。
-対応表は **公式ドキュメントで確認してから** `app/services/weather_codes.py` に実装し、ここに表を追記する。
+対応表は `app/services/weather_codes.py` に実装している（2026-10-12 に公式ドキュメントの天気コード表を人間が確認し、分類を決定）。
 
-| weather | 意味 |
-|---|---|
-| `clear` | 快晴 |
-| `partly_cloudy` | 晴れ時々曇り |
-| `cloudy` | 曇り |
-| `fog` | 霧 |
-| `drizzle` | 霧雨 |
-| `rain` | 雨 |
-| `snow` | 雪 |
-| `thunderstorm` | 雷雨 |
-| `unknown` | 対応表にないコード（エラーにせずこれを返し、ログに残す） |
+| weather | 意味 | 天気コード（Open-Meteo の説明） |
+|---|---|---|
+| `clear` | 快晴 | 0（Clear sky）、1（Mainly clear） |
+| `partly_cloudy` | 晴れ時々曇り | 2（Partly cloudy） |
+| `cloudy` | 曇り | 3（Overcast） |
+| `fog` | 霧 | 45（Fog）、48（Depositing rime fog） |
+| `drizzle` | 霧雨 | 51・53・55（Drizzle）、56・57（Freezing drizzle） |
+| `rain` | 雨 | 61・63・65（Rain）、66・67（Freezing rain）、80・81・82（Rain showers） |
+| `snow` | 雪 | 71・73・75（Snowfall）、77（Snow grains）、85・86（Snow showers） |
+| `thunderstorm` | 雷雨 | 95（Thunderstorm）、96・99（Thunderstorm with hail） |
+| `unknown` | 対応表にないコード（エラーにせずこれを返し、ログに残す） | 上記以外 |
 
 ### `GET /daylight?city=berlin&date=2026-12-21`
 
@@ -203,10 +206,12 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | 用途 | 提供元 | エンドポイント・項目（候補） | 利用条件・制限 | 状態 |
 |---|---|---|---|---|
-| 予報（現在・時間） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, precipitation_probability, weather_code, cloud_cover, cloud_cover_low/mid/high, pressure_msl, wind_speed_10m | 要確認 | 未確認 |
+| 予報（現在） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、`current=` に temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m。応答の `current.time` は UTC（`timezone` 未指定時、オフセットなしの ISO 8601） | 無料の API は非商用のみ。上限 600 回/分・5,000 回/時・10,000 回/日・300,000 回/月。API キー不要。データは CC BY 4.0（表示する場所に出典のリンクが必要） | 確認済み（2026-10-12、#3） |
+| 予報（時間） | Open-Meteo Forecast | 同上、hourly：上の項目と precipitation_probability, pressure_msl | 同上 | 未確認 |
 | 予報（日ごと） | Open-Meteo Forecast | 同上、daily：weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset | 要確認 | 未確認 |
-| 予報のオプション | Open-Meteo Forecast | 風速の単位指定（m/s）、タイムゾーン指定、予報日数の指定 | 要確認 | 未確認 |
-| 天気コード表 | Open-Meteo / WMO | weather_code の各値の意味 | — | 未確認 |
+| 予報のオプション（風速の単位） | Open-Meteo Forecast | `wind_speed_unit=ms`（既定は km/h） | 同上 | 確認済み（2026-10-12、#3） |
+| 予報のオプション（その他） | Open-Meteo Forecast | タイムゾーン指定、予報日数の指定 | 同上 | 未確認 |
+| 天気コード表 | Open-Meteo / WMO | weather_code の各値の意味（「天気の分類」の表を参照） | — | 確認済み（2026-10-12、#3） |
 | 太陽位置の計算式 | NOAA Solar Calculator | 計算式・大気差の扱い（実装の根拠として出典を記録） | — | 未確認 |
 | 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、上と同じ項目 | 要確認 | 未確認 |
 | METAR過去データ | Iowa Environmental Mesonet | ASOS/METAR ダウンロード、雲量（skyc1〜4）・雲高（skyl1〜4、フィート） | 要確認 | 未確認 |
@@ -301,7 +306,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 |---|---|---|---|
 | 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 完了 |
 | 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 進行中（ci.yml 導入済み。PR での実行確認とブランチ保護の設定が残っている） |
-| 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 未着手 |
+| 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 完了 |
 | 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 未着手 |
 | 5 | キャッシュ | TTL 内は外部APIを呼ばない。メモリ → Redis に切り替え可能 | 未着手 |
 | 6 | エラー処理 | タイムアウト・5xx でリトライ、stale 返却、502 の各テストが通る | 未着手 |
