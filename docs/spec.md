@@ -1,6 +1,6 @@
 # 仕様書（spec.md）
 
-最終更新：2026-10-12　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定）
+最終更新：2026-10-12　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定。#8 でデータ取得の仕様を確定）
 
 ## 1. 目的
 
@@ -262,8 +262,8 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 予報のオプション（日付の指定） | Open-Meteo Forecast | `start_date`・`end_date`（`yyyy-mm-dd`）。指定できる範囲は公式ドキュメントに書かれていない。2026-10-12 時点の実レスポンスでは 2026-07-11〜2026-10-27（それ以外は 400）。アプリでは使っていない | 同上 | 確認済み（2026-10-12、#7。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
 | 太陽位置の計算式 | NOAA Solar Calculator | `gml.noaa.gov/grad/solcalc/`。スプレッドシート（NOAA_Solar_Calculations_day）の各列の式（Jean Meeus『Astronomical Algorithms』による）。日の出入りの大気差は 0.833° と仮定。日の出入りは緯度 ±72° の内側で「理論上 1 分以内」。近似がよいのは 1800〜2100 年。薄明の式はない。**アプリからは通信しない**（式の出典と、テストの期待値＝スプレッドシートに入っている計算済みの値） | — | 確認済み（2026-10-12、#7。同上） |
 | 薄明・南中の期待値（テスト用） | 米国海軍天文台（USNO） | `aa.usno.navy.mil`。定義は日の出入りが天頂角 90.8333°、薄明が 6°・12°・18°（spec と同じ）。1 年ぶんの表（`/calculated/rstt/year`、`task` は 2＝市民・3＝航海・4＝天文）と 1 日ぶんのAPI（`/api/rstt/oneday`。市民薄明・日の出入り・南中）。どちらも分単位。**アプリからは通信しない**（fixture の取得だけ） | 利用の制限は書かれていない | 確認済み（2026-10-12、#7。同上） |
-| 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、`start_date`・`end_date`（必須）、`daily=` に sunrise, sunset、`timezone`、`timeformat=unixtime`（#7 のテストの期待値として確認・取得。1940 年〜現在、5 日遅れ）。気象の項目（上と同じ項目）は未確認（#8 で確認する） | 非商用は API キー不要 | 一部確認済み（2026-10-12、#7。sunrise・sunset だけ。同上） |
-| METAR過去データ | Iowa Environmental Mesonet | ASOS/METAR ダウンロード、雲量（skyc1〜4）・雲高（skyl1〜4、フィート） | 要確認 | 未確認 |
+| 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、`start_date`・`end_date`（必須、`yyyy-mm-dd`）。`hourly=` に temperature_2m, dew_point_2m, relative_humidity_2m, pressure_msl, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m（precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」）。`wind_speed_unit=ms`、`timeformat=unixtime`、`timezone` の既定は GMT。`daily=` に sunrise, sunset（#7 のテストの期待値として取得）。データは再解析（ERA5 など。1940 年〜、5 日遅れ） | 非商用は API キー不要。上限は予報と同じ（600 回/分・5,000 回/時・10,000 回/日・300,000 回/月）。10 項目を超える・2 週間を超える要求は、複数回ぶんとして数えられる（式は公式に書かれていない） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
+| METAR過去データ | Iowa Environmental Mesonet（IEM） | `mesonet.agron.iastate.edu/cgi-bin/request/asos.py`。`station`（ICAO）、`data`（列。複数可）、`sts`・`ets`（開始を含み、終了を含まない）、`tz=UTC`、`format=onlycomma`、`missing=empty`、`trace=empty`、`report_type`（3＝定時、4＝臨時）。列：valid（観測の時刻）、tmpf・dwpf（華氏）、vsby（マイル）、skyc1〜4（雲の層の量）、skyl1〜4（雲の層の高さ、フィート）、wxcodes、metar（もとの電文）。mslp は対象の 2 空港では空 | パブリックドメイン（IEM の名前を書くことが望ましい）。同じ IP からは 1 秒に 1 回まで（超えると 429）、混雑時は 503、1 回の要求は 1,000 観測所・年まで（超えると 422） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
 
 - 外部通信のタイムアウト：接続 3 秒、全体 10 秒。リトライは最大 2 回（指数バックオフ）。
   - 「全体 10 秒」は 1 回の試行ごと（2026-10-12 決定、#6）。
@@ -271,6 +271,9 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
   - リトライするのは、タイムアウト・接続エラー（途中で切れた接続を含む）・5xx だけ。4xx（429 を含む）と、壊れた応答（JSON でない、圧縮が壊れているなど）はリトライしない。
   - 設定（環境変数）：`OPEN_METEO_MAX_RETRIES`（既定 `2`、範囲 0〜5。上限は 2026-10-12 のレビューで決定）、`OPEN_METEO_RETRY_BACKOFF_S`（既定 `0.5`）。
 - 通信先は上表のホストのみ。NOAA と USNO は、開発時に資料と fixture を取得しただけで、アプリからは通信しない。
+- 学習データの一括取得（`notebooks/01_data_fetch`。#8、2026-10-12 決定）は、1 年ぶんをまとめて取るので、全体のタイムアウトを別に持つ。接続 3 秒とリトライの決まりは上と同じ。
+  - IEM を続けて呼ぶときは、間を 2 秒あける（並列にしない）。429 はリトライせず、そこで止まる（取得済みの年は保存してあるので、やり直すと続きから進む）。
+  - 設定（環境変数）：`DATA_FETCH_TIMEOUT_S`（既定 `60`。試行ごと）、`IEM_REQUEST_INTERVAL_S`（既定 `2`、1 未満は不可）、`IEM_BASE_URL`（既定 `https://mesonet.agron.iastate.edu`）、`OPEN_METEO_ARCHIVE_BASE_URL`（既定 `https://archive-api.open-meteo.com`）。
 
 ## 8. Discord 通知
 
@@ -311,11 +314,35 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | ファイル | 内容 | 成果物 |
 |---|---|---|
-| `01_data_fetch.ipynb` | METAR・Open-Meteo の取得と時刻結合 | `data/processed/*.parquet` |
+| `01_data_fetch.ipynb` | METAR・Open-Meteo の取得と時刻結合 | `data/processed/observations.parquet`（生データは `data/raw/`） |
 | `02_eda.ipynb` | 欠損、分布、季節差、都市差、露点差との関係 | `docs/eda.md`（要約） |
 | `03_baseline.ipynb` | ベースライン評価、評価関数の確定 | `reports/baseline.json` |
 | `04_train.ipynb` | 学習 | `models/cloud_base.joblib` |
 | `05_evaluate.ipynb` | テスト評価、都市別・季節別 | `reports/metrics.json`、`docs/model-card.md` |
+
+### データ取得（#8 で決めたこと、2026-10-12）
+
+- 期間は 2018-01-01〜2025-12-31（UTC）。都市 × 年ごとに取得する（2 都市 × 8 年 × 2 つのAPI ＝ 32 回）。
+- 生データ（応答のまま）を `data/raw/<提供元>/<city>_<年>.<csv|json>` に保存し、あれば使う（再実行で外部APIを呼ばない）。取り直すときは人間がファイルを消す。
+- 成果物は `data/processed/observations.parquet` の 1 ファイル。1 行 ＝ 都市 × 正時（UTC）。行の順は 都市 → 時刻。
+- 結合：正時ごとに、前後 30 分以内（ちょうどを含む）で最も近い METAR を 1 つ付ける。同じ距離が前後にあるときは早いほう。METAR のない正時も行を残し、METAR の列を欠損にする。
+- `ceiling_m` は、最も低い BKN または OVC の層の高さ（m）。該当する層がなければ欠損（「なし」の扱いは #9 で決める）。量が BKN・OVC でも高さが欠損の層は飛ばして、次の層を見る。
+- 単位は摂氏・メートル（IEM の華氏・マイル・フィートを直す）。気圧は Open-Meteo の値を使う（METAR の海面気圧は対象の 2 空港では入っていない）。
+- ノートブックは環境変数 `DATA_FETCH_MODE` で切り替える。既定の `sample` は `tests/fixtures/data_raw/` の 2 日ぶんを読み、外部と通信せず、一時的な場所に書く。全期間の取得は `full` を明示したときだけ。
+- 取得できる年は 1940〜2100 年に限る（それ以外は通信せずにエラー。下限は過去データの開始年、上限は `/daylight` の日付の範囲に合わせた。2026-10-12 のレビューで決定）。
+- **未決（#9 で決める）**：高さのない BKN・OVC の層（電文の `BKN///`）が東京に多い。BKN・OVC があるのに `ceiling_m` が欠損の正時が 11,397、高さのない層を飛ばして別の層から `ceiling_m` が決まった正時が 1,653 ある（後者は実際より高い値の可能性がある）。「飛ばして次の層を見る」のままでよいかを EDA で決める。
+- 依存：pandas・pyarrow は依存グループ `ml` に入れる（`uv sync` で入る）。API のイメージ（`Dockerfile`）には入れない。pandas を読み込めない PC では、`Dockerfile.dev` のイメージの中でテストを実行する。
+
+| 列 | 内容 |
+|---|---|
+| `city` | `tokyo`／`berlin` |
+| `time` | 正時（UTC） |
+| `temperature_c`、`dew_point_c`、`relative_humidity`、`pressure_msl_hpa`、`precipitation_mm`、`weather_code`、`cloud_cover`、`cloud_cover_low`・`_mid`・`_high`、`wind_speed_ms` | Open-Meteo の過去データ（その時刻の値。`precipitation_mm` だけ前の 1 時間の合計） |
+| `metar_observed_at` | 付けた METAR の観測時刻（UTC）。なければ欠損 |
+| `metar_temperature_c`、`metar_dew_point_c`、`visibility_m` | METAR の気温・露点・視程 |
+| `sky_cover_1〜4`、`sky_height_1_m〜4_m` | 雲の層の量（FEW・SCT・BKN・OVC など）と高さ（m） |
+| `weather_codes`、`metar` | 天気の記号、もとの電文 |
+| `ceiling_m` | 目的変数のもと。最も低い BKN・OVC の高さ（m） |
 
 ## 10. 非機能要件
 
@@ -349,7 +376,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR | ruff、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、docker build。nbmake は最初のノートブック（#8）で追加する |
+| `ci.yml` | PR | ruff、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
 | `cd.yml` | main へのマージ・タグ | イメージをビルド → コンテナ起動してスモークテスト → ghcr.io へ push |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
@@ -364,7 +391,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 5 | キャッシュ | TTL 内は外部APIを呼ばない。メモリ → Redis に切り替え可能 | 完了 |
 | 6 | エラー処理 | タイムアウト・5xx でリトライ、stale 返却、502 の各テストが通る | 完了 |
 | 7 | 日照・暗い時間 | `/daylight` が仕様どおり。Open-Meteo の日の出入りと ±2 分以内。境界のケースのテストが通る | 完了 |
-| 8 | データ取得 | `01_data_fetch` で両都市のデータを取得・結合できる | 未着手 |
+| 8 | データ取得 | `01_data_fetch` で両都市のデータを取得・結合できる | 完了 |
 | 9 | EDA | `02_eda` 完了、シーリングなしの扱いを決定し `docs/eda.md` に記録 | 未着手 |
 | 10 | ベースライン | `03_baseline` で都市別 MAE を算出、評価関数をテスト付きで `ml/` に実装 | 未着手 |
 | 11 | 学習・評価 | `04`・`05` 完了、ベースラインとの比較を `docs/model-card.md` に記録 | 未着手 |

@@ -195,3 +195,68 @@ def test_settings_stale_max_age_must_not_be_shorter_than_ttl(
     else:
         with pytest.raises(ValueError):
             Settings(_env_file=None)
+
+
+# --- #8 データ取得（一括取得の設定） ---
+
+DATA_FETCH_ENV = (
+    "IEM_BASE_URL",
+    "OPEN_METEO_ARCHIVE_BASE_URL",
+    "DATA_FETCH_TIMEOUT_S",
+    "IEM_REQUEST_INTERVAL_S",
+)
+
+
+def test_settings_data_fetch_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in DATA_FETCH_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.iem_base_url == "https://mesonet.agron.iastate.edu"
+    assert settings.open_meteo_archive_base_url == "https://archive-api.open-meteo.com"
+    # 1 年ぶんをまとめて取るので、全体のタイムアウトは通常（10 秒）より長い。
+    assert settings.data_fetch_timeout_s == 60.0
+    # IEM は同じ IP から 1 秒に 1 回まで。余裕を見て 2 秒あける。
+    assert settings.iem_request_interval_s == 2.0
+
+
+def test_settings_data_fetch_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IEM_BASE_URL", "https://example.invalid")
+    monkeypatch.setenv("OPEN_METEO_ARCHIVE_BASE_URL", "https://archive.example.invalid")
+    monkeypatch.setenv("DATA_FETCH_TIMEOUT_S", "120")
+    monkeypatch.setenv("IEM_REQUEST_INTERVAL_S", "3.5")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.iem_base_url == "https://example.invalid"
+    assert settings.open_meteo_archive_base_url == "https://archive.example.invalid"
+    assert settings.data_fetch_timeout_s == 120.0
+    assert settings.iem_request_interval_s == 3.5
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("DATA_FETCH_TIMEOUT_S", "0"),
+        ("DATA_FETCH_TIMEOUT_S", "-1"),
+        ("DATA_FETCH_TIMEOUT_S", "abc"),
+        # IEM の制限（1 秒に 1 回）より短い間隔は受け付けない。
+        ("IEM_REQUEST_INTERVAL_S", "0"),
+        ("IEM_REQUEST_INTERVAL_S", "0.99"),
+        ("IEM_REQUEST_INTERVAL_S", "abc"),
+    ],
+)
+def test_settings_reject_invalid_data_fetch_values(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None)
+
+
+def test_settings_accept_minimum_iem_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IEM_REQUEST_INTERVAL_S", "1")
+
+    assert Settings(_env_file=None).iem_request_interval_s == 1.0

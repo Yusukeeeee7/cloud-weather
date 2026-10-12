@@ -32,6 +32,25 @@ https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&curr
 - Open-Meteo の応答に入っている緯度・経度は、送った値（spec の値）と少し違う（格子点の座標）。計算は spec の値で行う。
 - 出典：USNO Astronomical Applications Department（https://aa.usno.navy.mil/）、NOAA Global Monitoring Laboratory（https://gml.noaa.gov/grad/solcalc/）。
 
+## 学習データ（#8 データ取得）の生データのサンプル
+
+`data_raw/` は、ノートブック `01_data_fetch` が保存する生データ（`data/raw/`）と同じ並び
+（`<提供元>/<city>_<年>.<拡張子>`）で置いてある。**ファイル名は 2025 年だが、中身は 2025-01-15〜16 の 2 日ぶんだけ**。
+テストの期待値と、ノートブックのサンプル実行（nbmake・CI）の入力の両方に使う。応答は取得したまま。
+
+| ファイル | 取得日時（UTC） | 取得方法 |
+|---|---|---|
+| `data_raw/iem/tokyo_2025.csv`（RJTT）、`berlin_2025.csv`（EDDB） | 2026-10-12T20:50Z | `curl`、`mesonet.agron.iastate.edu/cgi-bin/request/asos.py?station=<ICAO>&data=tmpf,dwpf,relh,drct,sknt,alti,mslp,vsby,skyc1,skyc2,skyc3,skyc4,skyl1,skyl2,skyl3,skyl4,wxcodes,metar&sts=2025-01-15T00:00:00Z&ets=2025-01-17T00:00:00Z&tz=UTC&format=onlycomma&missing=empty&trace=empty&report_type=3&report_type=4` |
+| `data_raw/open_meteo_archive/berlin_2025.json` | 2026-10-12T20:50Z | `curl`、`archive-api.open-meteo.com/v1/archive?latitude=52.36&longitude=13.50&hourly=temperature_2m,dew_point_2m,relative_humidity_2m,pressure_msl,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&start_date=2025-01-15&end_date=2025-01-16&wind_speed_unit=ms&timeformat=unixtime` |
+| `data_raw/open_meteo_archive/tokyo_2025.json` | 2026-10-12T20:53:22Z | 同上で `latitude=35.55&longitude=139.78` |
+
+- METAR は、アプリが要求する列（`tmpf`・`dwpf`・`vsby`・`skyc1〜4`・`skyl1〜4`・`wxcodes`・`metar`）より多い列で取得してある
+  （調査のときの応答をそのまま使ったため。`relh`・`drct`・`sknt`・`alti`・`mslp` が余分）。整形は必要な列だけを使う。
+- METAR の値は華氏・マイル・フィート。時刻は UTC（`YYYY-MM-DD HH:MM`）。欠損は空文字。
+- 東京は毎時 0 分・30 分と臨時の報告、ベルリンは毎時 20 分・50 分。高さのない雲の層（電文の `SCT///`）を含む。
+- 出典：Iowa Environmental Mesonet, Iowa State University（https://mesonet.agron.iastate.edu/ 。パブリックドメイン）、
+  Weather data by Open-Meteo.com（CC BY 4.0）。
+
 ## 2 種類ある理由
 
 - `forecast_<city>.json`：アプリが実際に受け取る形（時刻が UNIX 秒）。

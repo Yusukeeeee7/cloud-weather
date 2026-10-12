@@ -1,0 +1,26 @@
+# 手元でのテスト用（本番のイメージではない）。dev と ml の依存を入れ、リポジトリを /work に載せて使う。
+# Windows のアプリケーション制御ポリシーで numpy（pandas）を読み込めない PC でも、
+# `ml/` のテスト・mypy・nbmake を実行できるようにするためのもの。
+#
+#   docker build -f Dockerfile.dev -t cloud-weather-dev .
+#   docker run --rm -v "${PWD}:/work" cloud-weather-dev uv run --locked pytest --cov=app --cov=ml
+#
+# 依存（pyproject.toml・uv.lock）を変えたら、ビルドし直す。
+FROM python:3.14-slim
+
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /bin/
+
+# 仮想環境はイメージの中（/venv）に置き、載せたリポジトリの .venv（Windows 用）には触らない。
+ENV UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0 \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /deps
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-install-project
+
+RUN useradd --system --create-home --uid 10001 appuser && chown -R appuser /venv
+USER appuser
+
+WORKDIR /work

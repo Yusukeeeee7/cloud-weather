@@ -9,7 +9,8 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-install-project
+# ml（pandas など。学習データの取得・学習用）は API のイメージに入れない。
+RUN uv sync --locked --no-install-project --no-group ml
 
 
 FROM python:3.14-slim
