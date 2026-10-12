@@ -211,9 +211,9 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 |---|---|---|---|---|
 | 予報（現在） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、`current=` に temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m。応答の `current.time` は UTC（`timezone` 未指定時、オフセットなしの ISO 8601） | 無料の API は非商用のみ。上限 600 回/分・5,000 回/時・10,000 回/日・300,000 回/月。API キー不要。データは CC BY 4.0（表示する場所に出典のリンクが必要） | 確認済み（2026-10-12、#3） |
 | 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から）。pressure_msl は未使用・未確認（#12 で確認する） | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
-| 予報（日ごと） | Open-Meteo Forecast | 同上、`daily=` に weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset。`daily` を指定するときは `timezone` が必須 | 同上 | 確認済み（2026-10-12、#4。同上） |
+| 予報（日ごと） | Open-Meteo Forecast | 同上、`daily=` に weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset。公式ドキュメントは「`daily` を指定するときは `timezone` が必須」としている（実際には指定しなくても 200 が返り、GMT の日付で区切られた。必ず指定する） | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 予報のオプション（風速の単位） | Open-Meteo Forecast | `wind_speed_unit=ms`（既定は km/h） | 同上 | 確認済み（2026-10-12、#3） |
-| 予報のオプション（その他） | Open-Meteo Forecast | `timezone=<IANA の名前>`（既定は GMT。日ごとの値がそのタイムゾーンの日付で区切られる）、`timeformat=unixtime`（既定は iso8601。時刻が UTC の UNIX 秒になり、`daily.time` は現地 0 時の瞬間。応答の `utc_offset_seconds` は取得時点の 1 つの値）、`forecast_days=7`（既定 7、範囲 0〜16） | 同上 | 確認済み（2026-10-12、#4。同上） |
+| 予報のオプション（その他） | Open-Meteo Forecast | `timezone=<IANA の名前>`（既定は GMT。日ごとの値がそのタイムゾーンの日付で区切られる）、`timeformat=unixtime`（既定は iso8601。時刻が UTC の UNIX 秒になる。`daily.time` に `utc_offset_seconds` を足すと日付になる。`utc_offset_seconds` は取得時点の UTC との差で、応答全体に 1 つだけ。日ごとの区切りもこの固定の差で行われ、夏時間の切り替えをまたいでも 24 時間おき＝切り替え後の日は現地の 0 時から 1 時間ずれた区切りになる）、`forecast_days=7`（既定 7、範囲 0〜16。17 は 400、0 は空の配列） | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 天気コード表 | Open-Meteo / WMO | weather_code の各値の意味（「天気の分類」の表を参照） | — | 確認済み（2026-10-12、#3） |
 | 太陽位置の計算式 | NOAA Solar Calculator | 計算式・大気差の扱い（実装の根拠として出典を記録） | — | 未確認 |
 | 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、上と同じ項目 | 要確認 | 未確認 |

@@ -421,8 +421,8 @@ def test_service_accepts_integer_for_decimal_forecast_field(forecast: Forecast) 
 def test_service_daily_date_survives_one_hour_shift(
     forecast: Forecast, forecast_iso8601: Forecast, shift_s: int
 ) -> None:
-    # 応答の utc_offset_seconds は取得時点の 1 つの値。夏時間の切り替えをまたぐ日は、
-    # 現地 0 時の瞬間がその値から 1 時間ずれる。ずれても日付が変わらないこと。
+    # 余裕の確認：daily.time が 0 時の瞬間から 1 時間ずれていても、日付が変わらないこと。
+    # 実レスポンスでは、夏時間の切り替えをまたいでもこのずれは起きなかった（2026-10-12 に確認）。
     raw = forecast("berlin")
     raw["daily"]["time"] = [value + shift_s for value in raw["daily"]["time"]]
 

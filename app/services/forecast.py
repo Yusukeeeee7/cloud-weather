@@ -128,8 +128,10 @@ def build_hourly(raw: Mapping[str, Any], now: datetime) -> list[HourlyForecast]:
 
 
 def _local_date(local_midnight: int, utc_offset_s: int) -> date:
-    # daily.time は現地 0 時の瞬間。utc_offset_seconds は取得時点の 1 つの値なので、
-    # 夏時間の切り替えをまたぐ日は 1 時間ずれる。現地の正午に進めてから日付を取り、ずれを吸収する。
+    # daily.time は、取得時点の UTC との差（utc_offset_seconds）で区切った日の 0 時の瞬間。
+    # 公式ドキュメントのとおり utc_offset_seconds を足して日付にする。
+    # さらに 12 時間進めるのは、0 時の瞬間が 1 時間ずれていても日付を保つための余裕
+    # （実レスポンスでは、夏時間の切り替えをまたいでも 24 時間おきで、ずれは起きなかった）。
     return (from_unix(local_midnight) + timedelta(seconds=utc_offset_s, hours=12)).date()
 
 
