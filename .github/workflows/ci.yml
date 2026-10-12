@@ -40,6 +40,10 @@ jobs:
       - name: Pytest (coverage)
         run: uv run pytest --cov=app --cov=ml
 
+      # サンプルデータ（tests/fixtures/data_raw/）で実行する。外部とは通信しない。
+      - name: Notebooks (nbmake)
+        run: uv run pytest --nbmake notebooks/
+
       - name: pip-audit
         run: uv run pip-audit --progress-spinner off
 

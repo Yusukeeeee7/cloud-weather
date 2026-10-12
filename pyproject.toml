@@ -19,6 +19,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# ノートブックは、最初のセルでリポジトリの場所を sys.path に足してから import する。
+"notebooks/*.ipynb" = ["E402"]
+
 [tool.mypy]
 python_version = "3.14"
 strict = true
@@ -32,10 +36,22 @@ fail_under = 80
 [dependency-groups]
 dev = [
     "fakeredis>=2.39.0",
+    "ipykernel>=7.4.0",
     "mypy>=2.4.0",
+    "nbmake>=1.5.5",
+    "nbstripout>=0.9.1",
+    "pandas-stubs>=3.0.5.260914",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
     "ruff>=0.17.0",
 ]
+ml = [
+    "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
+]
+
+[tool.uv]
+# ml（pandas など）も、手元と CI では既定でインストールする。
+default-groups = ["dev", "ml"]

@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     # 最初の 1 回に加えてやり直す回数。待ち時間は 基準 × 2^(回数 − 1)。
     open_meteo_max_retries: int = Field(default=2, ge=0, le=5)
     open_meteo_retry_backoff_s: float = Field(default=0.5, gt=0)
+    # 学習データの一括取得（notebooks/01_data_fetch）。API の応答には使わない。
+    iem_base_url: str = "https://mesonet.agron.iastate.edu"
+    open_meteo_archive_base_url: str = "https://archive-api.open-meteo.com"
+    # 1 年ぶんをまとめて取るので、全体のタイムアウトは通常より長い（試行ごと）。
+    data_fetch_timeout_s: float = Field(default=60.0, gt=0)
+    # IEM は同じ IP から 1 秒に 1 回まで。続けて呼ぶときにあける間隔。
+    iem_request_interval_s: float = Field(default=2.0, ge=1)
     log_level: LogLevel = "INFO"
     # 既定はメモリ（Redis なしで起動・テストできるようにする）。
     cache_backend: CacheBackend = "memory"
