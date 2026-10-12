@@ -15,8 +15,17 @@ EXPECTED_CURRENT = (
     "temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,"
     "weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m"
 )
+EXPECTED_HOURLY = (
+    "temperature_2m,precipitation_probability,precipitation,weather_code,"
+    "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high"
+)
+EXPECTED_DAILY = (
+    "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,"
+    "precipitation_probability_max,sunrise,sunset"
+)
 # spec.md「3. 対象地点」の値。
 COORDINATES = {City.TOKYO: (35.55, 139.78), City.BERLIN: (52.36, 13.50)}
+TIMEZONES = {City.TOKYO: "Asia/Tokyo", City.BERLIN: "Europe/Berlin"}
 
 
 async def _fetch(city: City, settings: Settings | None = None) -> RawForecast:
@@ -40,10 +49,51 @@ def test_client_requests_expected_host_and_params(
     assert url.host == "api.open-meteo.com"
     assert url.path == "/v1/forecast"
     params = dict(url.params)
-    assert set(params) == {"latitude", "longitude", "current", "wind_speed_unit"}
+    assert set(params) == {
+        "latitude",
+        "longitude",
+        "current",
+        "hourly",
+        "daily",
+        "wind_speed_unit",
+        "timezone",
+        "timeformat",
+        "forecast_days",
+    }
     assert params["current"] == EXPECTED_CURRENT
     assert params["wind_speed_unit"] == "ms"
     assert result == forecast("tokyo")
+
+
+def test_client_requests_hourly_and_daily_params(
+    open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(
+        return_value=httpx.Response(200, json=forecast("tokyo"))
+    )
+
+    asyncio.run(_fetch(City.TOKYO))
+
+    # 現在・時間ごと・日ごとを 1 回の呼び出しでまとめて取得する。
+    assert route.call_count == 1
+    params = route.calls.last.request.url.params
+    assert params["hourly"] == EXPECTED_HOURLY
+    assert params["daily"] == EXPECTED_DAILY
+    assert params["timeformat"] == "unixtime"
+    assert params["forecast_days"] == "7"
+
+
+@pytest.mark.parametrize("city", [City.TOKYO, City.BERLIN])
+def test_client_sends_city_timezone(
+    open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast], city: City
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(
+        return_value=httpx.Response(200, json=forecast(city.value))
+    )
+
+    asyncio.run(_fetch(city))
+
+    assert route.calls.last.request.url.params["timezone"] == TIMEZONES[city]
 
 
 @pytest.mark.parametrize("city", [City.TOKYO, City.BERLIN])

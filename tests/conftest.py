@@ -10,21 +10,37 @@ from fastapi.testclient import TestClient
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+# fixture を取得した時刻（2026-10-12T15:02:12Z）の直後にする。
+# hourly の 24 件は時計に依存するため、fixture を取り直したらここも変える。
 # 秒未満を含む時刻にして、レスポンスで切り捨てられることも確かめられるようにする。
-FIXED_NOW = datetime(2026, 10, 12, 13, 41, 2, 123456, tzinfo=UTC)
+FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 
 RawForecast = dict[str, Any]
 
 
-def load_forecast(city: str) -> RawForecast:
-    path = FIXTURES_DIR / "open_meteo" / f"forecast_current_{city}.json"
+def _load(name: str) -> RawForecast:
+    path = FIXTURES_DIR / "open_meteo" / name
     raw: RawForecast = json.loads(path.read_text(encoding="utf-8"))
     return raw
+
+
+def load_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}.json")
+
+
+def load_forecast_iso8601(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_iso8601.json")
 
 
 @pytest.fixture
 def forecast() -> Callable[[str], RawForecast]:
     return load_forecast
+
+
+@pytest.fixture
+def forecast_iso8601() -> Callable[[str], RawForecast]:
+    # 同じ時刻に、時刻形式だけ変えて取得した応答。現地の日付の期待値として使う。
+    return load_forecast_iso8601
 
 
 @pytest.fixture

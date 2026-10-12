@@ -1,6 +1,6 @@
 # 仕様書（spec.md）
 
-最終更新：2026-10-12　／　状態：初版（天気予報の拡張・日照計算を追加）
+最終更新：2026-10-12　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定）
 
 ## 1. 目的
 
@@ -111,6 +111,9 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
 ```
 
 - `hourly` は現在時刻以降の 24 件、`daily` は今日から 7 日分。
+  - `hourly` の先頭は、現在より後の最初の正時（現在が 13:41 なら 14:00。現在が正時ちょうどならその時刻を含む。2026-10-12 決定）。
+  - `daily` の「今日」と日付の区切りは現地の日付。`sunrise`・`sunset` は Open-Meteo の値を丸めずに UTC で返す（秒まで入る。上の例は `:00` だが、分単位に丸めない。2026-10-12 決定）。
+  - 返す範囲（24 件・7 日）の項目が Open-Meteo の応答に欠けている・null の場合、件数が足りない場合は 502 `upstream_error`（一部だけ返さない。2026-10-12 決定）。
 - `city` を省略した場合は `tokyo` として扱う（2026-10-12 決定。使い始めやすくするため）。空文字（`city=`）は省略とは扱わず 422 `invalid_city`。
 - `current` の項目が Open-Meteo の応答に欠けている・null の場合は 502 `upstream_error`（一部だけ null で返さない。2026-10-12 決定）。
 - 機能ごとに段階的に追加する：#3 で `city`・`timezone`・`current`・`source`・`fetched_at`、#4 で `hourly`・`daily`。`cached`・`stale` をどの機能で追加するかは #5・#6 の計画で決める。未実装のキーは返さない。
@@ -207,10 +210,10 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 用途 | 提供元 | エンドポイント・項目（候補） | 利用条件・制限 | 状態 |
 |---|---|---|---|---|
 | 予報（現在） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、`current=` に temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m。応答の `current.time` は UTC（`timezone` 未指定時、オフセットなしの ISO 8601） | 無料の API は非商用のみ。上限 600 回/分・5,000 回/時・10,000 回/日・300,000 回/月。API キー不要。データは CC BY 4.0（表示する場所に出典のリンクが必要） | 確認済み（2026-10-12、#3） |
-| 予報（時間） | Open-Meteo Forecast | 同上、hourly：上の項目と precipitation_probability, pressure_msl | 同上 | 未確認 |
-| 予報（日ごと） | Open-Meteo Forecast | 同上、daily：weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset | 要確認 | 未確認 |
+| 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から）。pressure_msl は未使用・未確認（#12 で確認する） | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
+| 予報（日ごと） | Open-Meteo Forecast | 同上、`daily=` に weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset。`daily` を指定するときは `timezone` が必須 | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 予報のオプション（風速の単位） | Open-Meteo Forecast | `wind_speed_unit=ms`（既定は km/h） | 同上 | 確認済み（2026-10-12、#3） |
-| 予報のオプション（その他） | Open-Meteo Forecast | タイムゾーン指定、予報日数の指定 | 同上 | 未確認 |
+| 予報のオプション（その他） | Open-Meteo Forecast | `timezone=<IANA の名前>`（既定は GMT。日ごとの値がそのタイムゾーンの日付で区切られる）、`timeformat=unixtime`（既定は iso8601。時刻が UTC の UNIX 秒になり、`daily.time` は現地 0 時の瞬間。応答の `utc_offset_seconds` は取得時点の 1 つの値）、`forecast_days=7`（既定 7、範囲 0〜16） | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 天気コード表 | Open-Meteo / WMO | weather_code の各値の意味（「天気の分類」の表を参照） | — | 確認済み（2026-10-12、#3） |
 | 太陽位置の計算式 | NOAA Solar Calculator | 計算式・大気差の扱い（実装の根拠として出典を記録） | — | 未確認 |
 | 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、上と同じ項目 | 要確認 | 未確認 |
@@ -307,7 +310,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 完了 |
 | 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 進行中（ci.yml 導入済み。PR での実行確認とブランチ保護の設定が残っている） |
 | 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 完了 |
-| 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 未着手 |
+| 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 完了 |
 | 5 | キャッシュ | TTL 内は外部APIを呼ばない。メモリ → Redis に切り替え可能 | 未着手 |
 | 6 | エラー処理 | タイムアウト・5xx でリトライ、stale 返却、502 の各テストが通る | 未着手 |
 | 7 | 日照・暗い時間 | `/daylight` が仕様どおり。Open-Meteo の日の出入りと ±2 分以内。境界のケースのテストが通る | 未着手 |

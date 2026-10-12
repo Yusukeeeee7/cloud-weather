@@ -1,3 +1,4 @@
+import datetime as dt
 from datetime import datetime
 from typing import Literal
 
@@ -26,10 +27,35 @@ class CurrentWeather(BaseModel):
     cloud_cover: CloudCover
 
 
+class HourlyForecast(BaseModel):
+    time: datetime
+    weather_code: int
+    weather: WeatherCategory
+    temperature_c: float
+    precipitation_probability: int
+    precipitation_mm: float
+    cloud_cover: CloudCover
+
+
+class DailyForecast(BaseModel):
+    # 現地の日付。sunrise・sunset は UTC。
+    date: dt.date
+    weather_code: int
+    weather: WeatherCategory
+    temperature_max_c: float
+    temperature_min_c: float
+    precipitation_probability_max: int
+    precipitation_sum_mm: float
+    sunrise: datetime
+    sunset: datetime
+
+
 class WeatherResponse(BaseModel):
     city: str
     timezone: str
     current: CurrentWeather
+    hourly: list[HourlyForecast]
+    daily: list[DailyForecast]
     source: Literal["open-meteo"]
     fetched_at: datetime
 
