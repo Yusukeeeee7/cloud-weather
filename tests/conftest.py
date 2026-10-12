@@ -53,6 +53,18 @@ def forecast_iso8601() -> Callable[[str], RawForecast]:
     return load_forecast_iso8601
 
 
+@pytest.fixture(autouse=True)
+def waits(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """リトライの合間の待ちを、記録するだけにする（テストで実際に待たない）。待った秒の一覧を返す。"""
+    recorded: list[float] = []
+
+    async def record(seconds: float) -> None:
+        recorded.append(seconds)
+
+    monkeypatch.setattr("app.clients.open_meteo.wait", record)
+    return recorded
+
+
 @pytest.fixture
 def open_meteo() -> Iterator[respx.MockRouter]:
     # モックしていない通信が起きたらテストを失敗させる（外部APIを実際に呼ばない）。

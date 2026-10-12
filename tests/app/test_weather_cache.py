@@ -17,8 +17,9 @@ from app.schemas import WeatherResponse
 from app.services.weather import get_weather
 from tests.conftest import FIXED_NOW, FORECAST_URL, FakeClock, RawForecast
 
-# spec.md「6. キャッシュ」の TTL 15 分。
+# spec.md「6. キャッシュ」の TTL 15 分。stale は最大 6 時間前まで。
 TTL_S = 900
+STALE_MAX_AGE_S = 21600
 TOKYO_KEY = "weather:tokyo"
 BERLIN_KEY = "weather:berlin"
 
@@ -57,7 +58,8 @@ def _call(city: City, clock: FakeClock, cache: Cache, ttl_s: int = TTL_S) -> Wea
     async def run() -> WeatherResponse:
         settings = Settings(_env_file=None)
         async with build_http_client(settings) as http:
-            return await get_weather(city, OpenMeteoClient(http, settings), clock, cache, ttl_s)
+            client = OpenMeteoClient(http, settings)
+            return await get_weather(city, client, clock, cache, ttl_s, STALE_MAX_AGE_S)
 
     return asyncio.run(run())
 
@@ -244,15 +246,16 @@ def test_service_hit_reselects_hourly_by_now(
 
 
 @pytest.mark.parametrize(
-    "upstream",
+    ("upstream", "calls_per_request"),
     [
-        {"side_effect": httpx.ReadTimeout},
-        {"return_value": httpx.Response(500)},
-        {"return_value": httpx.Response(200, content=b"not json")},
+        # タイムアウトと 5xx はリトライする（最初の 1 回 + リトライ 2 回。#6）。
+        ({"side_effect": httpx.ReadTimeout}, 3),
+        ({"return_value": httpx.Response(500)}, 3),
+        ({"return_value": httpx.Response(200, content=b"not json")}, 1),
     ],
 )
 def test_service_upstream_failure_is_not_cached(
-    open_meteo: respx.MockRouter, upstream: dict[str, object]
+    open_meteo: respx.MockRouter, upstream: dict[str, object], calls_per_request: int
 ) -> None:
     route = open_meteo.get(FORECAST_URL).mock(**upstream)
     cache = MemoryCache()
@@ -265,7 +268,7 @@ def test_service_upstream_failure_is_not_cached(
         _call(City.TOKYO, clock, cache)
 
     # 失敗を保存していないので、次の呼び出しでまた外部APIを呼ぶ。
-    assert route.call_count == 2
+    assert route.call_count == 2 * calls_per_request
 
 
 @pytest.mark.parametrize("section", ["current", "hourly", "daily"])

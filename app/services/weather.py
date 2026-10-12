@@ -74,6 +74,7 @@ def build_weather_response(
     *,
     now: datetime | None = None,
     cached: bool = False,
+    stale: bool = False,
 ) -> WeatherResponse:
     """`now` は hourly の 24 件を選ぶ基準。省略時は取得時刻（いま取得した応答）。"""
     current, time = _parse_current(raw)
@@ -102,6 +103,7 @@ def build_weather_response(
         source="open-meteo",
         fetched_at=fetched_at.astimezone(UTC).replace(microsecond=0),
         cached=cached,
+        stale=stale,
     )
 
 
@@ -131,39 +133,77 @@ def _is_fresh(entry: _CacheEntry, now: datetime, ttl_s: int) -> bool:
     return timedelta(0) <= now - entry.fetched_at < timedelta(seconds=ttl_s)
 
 
-async def _from_cache(
-    cache: Cache, city: City, now: datetime, ttl_s: int
+def _is_usable_as_stale(entry: _CacheEntry, now: datetime, stale_max_age_s: int) -> bool:
+    # 上限ちょうどは使う（「最大 6 時間前まで」）。取得時刻が未来の保存値は使わない。
+    return timedelta(0) <= now - entry.fetched_at <= timedelta(seconds=stale_max_age_s)
+
+
+def _from_entry(
+    city: City, entry: _CacheEntry, now: datetime, *, stale: bool
 ) -> WeatherResponse | None:
-    entry = await _load_entry(cache, cache_key(city))
-    if entry is None or not _is_fresh(entry, now, ttl_s):
-        return None
     try:
         # 保存してあるのは整形前の応答。hourly はいまの時刻で選び直す。
-        return build_weather_response(city, entry.raw, entry.fetched_at, now=now, cached=True)
+        return build_weather_response(
+            city, entry.raw, entry.fetched_at, now=now, cached=True, stale=stale
+        )
     except UpstreamError:
-        logger.warning("cached forecast is no longer usable; fetching from open-meteo")
+        logger.warning("cached forecast is no longer usable")
         return None
+
+
+def _fresh_response(
+    city: City, entry: _CacheEntry | None, now: datetime, ttl_s: int
+) -> WeatherResponse | None:
+    if entry is None or not _is_fresh(entry, now, ttl_s):
+        return None
+    return _from_entry(city, entry, now, stale=False)
+
+
+def _stale_response(
+    city: City, entry: _CacheEntry | None, now: datetime, stale_max_age_s: int
+) -> WeatherResponse | None:
+    if entry is None or not _is_usable_as_stale(entry, now, stale_max_age_s):
+        return None
+    response = _from_entry(city, entry, now, stale=True)
+    if response is not None:
+        age_s = int((now - entry.fetched_at).total_seconds())
+        logger.warning("open-meteo failed; returning stale cache (%s, %d s old)", city.value, age_s)
+    return response
 
 
 async def _store(
-    cache: Cache, city: City, raw: dict[str, Any], fetched_at: datetime, ttl_s: int
+    cache: Cache, city: City, raw: dict[str, Any], fetched_at: datetime, expire_s: int
 ) -> None:
     entry = _CacheEntry(fetched_at=fetched_at.astimezone(UTC), raw=raw)
     try:
-        await cache.set(cache_key(city), entry.model_dump_json(), ttl_s)
+        await cache.set(cache_key(city), entry.model_dump_json(), expire_s)
     except CacheError:
         logger.warning("cache write failed; returning the response without caching")
 
 
 async def get_weather(
-    city: City, client: OpenMeteoClient, clock: Clock, cache: Cache, ttl_s: int
+    city: City,
+    client: OpenMeteoClient,
+    clock: Clock,
+    cache: Cache,
+    ttl_s: int,
+    stale_max_age_s: int,
 ) -> WeatherResponse:
-    cached = await _from_cache(cache, city, clock(), ttl_s)
-    if cached is not None:
-        return cached
-    raw = await client.fetch_forecast(city)
-    fetched_at = clock()
-    # 整形に成功した応答だけを保存する（壊れた応答を保存すると TTL の間 502 が続く）。
-    response = build_weather_response(city, raw, fetched_at)
-    await _store(cache, city, raw, fetched_at, ttl_s)
+    entry = await _load_entry(cache, cache_key(city))
+    fresh = _fresh_response(city, entry, clock(), ttl_s)
+    if fresh is not None:
+        return fresh
+    try:
+        raw = await client.fetch_forecast(city)
+        fetched_at = clock()
+        # 整形に成功した応答だけを保存する（壊れた応答を保存すると 502 が続く）。
+        response = build_weather_response(city, raw, fetched_at)
+    except UpstreamError:
+        # 外部APIの失敗・壊れた応答のときは、上限までの古い保存値で代える。なければ 502。
+        stale = _stale_response(city, entry, clock(), stale_max_age_s)
+        if stale is None:
+            raise
+        return stale
+    # 新しいかどうかは取得時刻で判定する。保存先の期限は、stale の上限まで残すためのもの。
+    await _store(cache, city, raw, fetched_at, stale_max_age_s)
     return response
