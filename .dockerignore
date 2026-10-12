@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+.env
+.env.*
+.claude
+.coverage
+htmlcov
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.ipynb_checkpoints
+data
+docs
+notebooks
+tests

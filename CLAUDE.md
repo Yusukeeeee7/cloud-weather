@@ -12,7 +12,7 @@
 
 ## 技術スタック
 
-Python 3.12 / uv / FastAPI / httpx / pydantic-settings / Redis / pandas / LightGBM / Jupyter /
+Python 3.14 / uv / FastAPI / httpx / pydantic-settings / Redis / pandas / LightGBM / Jupyter /
 pytest / respx / nbmake / ruff / mypy / Docker / docker compose / GitHub Actions
 
 ## ディレクトリ
