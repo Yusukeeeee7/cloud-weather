@@ -22,6 +22,7 @@ TOP_LEVEL_KEYS = {
     "source",
     "fetched_at",
     "cached",
+    "stale",
 }
 HOURLY_KEYS = {
     "time",
@@ -124,9 +125,9 @@ def test_weather_returns_hourly_and_daily_shape(
         assert set(item["cloud_cover"]) == {"total", "low", "mid", "high"}
     for item in body["daily"]:
         assert set(item) == DAILY_KEYS
-    # cached は #5 で追加。stale は #6 まで返さない。
+    # cached は #5、stale は #6 で追加。
     assert body["cached"] is False
-    assert "stale" not in body
+    assert body["stale"] is False
     assert route.call_count == 1
 
 
@@ -345,7 +346,7 @@ def test_weather_cached_response_keeps_spec_shape(
 
     assert body["cached"] is True
     assert set(body) == TOP_LEVEL_KEYS
-    assert "stale" not in body
+    assert body["stale"] is False
     assert len(body["hourly"]) == 24
     assert len(body["daily"]) == 7
     assert UTC_Z.match(body["fetched_at"])
@@ -384,7 +385,13 @@ def test_weather_upstream_error_then_success(
     client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
 ) -> None:
     route = open_meteo.get(FORECAST_URL).mock(
-        side_effect=[httpx.Response(500), httpx.Response(200, json=forecast("tokyo"))]
+        # 1 回目のリクエストはリトライを使い切るまで失敗する（最初の 1 回 + リトライ 2 回。#6）。
+        side_effect=[
+            httpx.Response(500),
+            httpx.Response(500),
+            httpx.Response(500),
+            httpx.Response(200, json=forecast("tokyo")),
+        ]
     )
 
     failed = client.get("/weather", params={"city": "tokyo"})
@@ -394,7 +401,7 @@ def test_weather_upstream_error_then_success(
     assert failed.status_code == 502
     assert recovered.status_code == 200
     assert recovered.json()["cached"] is False
-    assert route.call_count == 2
+    assert route.call_count == 4
 
 
 def test_weather_cache_failure_still_returns_200(
@@ -434,3 +441,180 @@ def test_weather_uses_configured_ttl(
 
     assert (hit["cached"], miss["cached"]) == (True, False)
     assert route.call_count == 2
+
+
+# --- #6 エラー処理（リトライ・stale・502） ---
+
+SIX_HOURS = timedelta(hours=6)
+
+
+def _use_settings(**values: int) -> None:
+    from app.config import Settings, get_settings
+    from app.main import app
+
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None, **values)
+
+
+@pytest.mark.parametrize("backend", ["default", "redis"])
+def test_weather_returns_stale_when_upstream_fails(
+    client: TestClient,
+    open_meteo: respx.MockRouter,
+    forecast: Callable[[str], RawForecast],
+    backend: str,
+) -> None:
+    # 受け入れ条件：外部APIが失敗しても、6 時間以内の保存値があれば stale: true で 200。
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    cache = _build_backend(backend)
+    if cache is not None:
+        _use_cache(cache)
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    first = client.get("/weather", params={"city": "tokyo"})
+
+    route.mock(return_value=httpx.Response(500))
+    clock.now = FIXED_NOW + timedelta(minutes=20)
+    second = client.get("/weather", params={"city": "tokyo"})
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert (first.json()["cached"], first.json()["stale"]) == (False, False)
+    body = second.json()
+    assert set(body) == TOP_LEVEL_KEYS
+    assert (body["cached"], body["stale"]) == (True, True)
+    assert body["fetched_at"] == first.json()["fetched_at"] == "2026-10-12T15:02:30Z"
+    assert body["current"] == first.json()["current"]
+    assert len(body["hourly"]) == 24
+    assert len(body["daily"]) == 7
+    # 最初の取得 1 回 + 失敗した 3 回（最初の 1 回 + リトライ 2 回）。
+    assert route.call_count == 4
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "expected_status"),
+    [(SIX_HOURS, 200), (SIX_HOURS + timedelta(seconds=1), 502)],
+)
+def test_weather_stale_older_than_limit_returns_502(
+    client: TestClient,
+    open_meteo: respx.MockRouter,
+    forecast: Callable[[str], RawForecast],
+    elapsed: timedelta,
+    expected_status: int,
+) -> None:
+    # spec.md「6. キャッシュ」：最大 6 時間前まで。それより古ければ 502。
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    route.mock(return_value=httpx.Response(500))
+    clock.now = FIXED_NOW + elapsed
+    response = client.get("/weather", params={"city": "tokyo"})
+
+    assert response.status_code == expected_status
+    body = response.json()
+    if expected_status == 200:
+        assert body["stale"] is True
+    else:
+        assert set(body) == {"error"}
+        assert body["error"]["code"] == "upstream_error"
+
+
+@pytest.mark.parametrize("failure", [httpx.ReadTimeout, httpx.ConnectError, httpx.Response(503)])
+def test_weather_retries_then_returns_200(
+    client: TestClient,
+    open_meteo: respx.MockRouter,
+    forecast: Callable[[str], RawForecast],
+    waits: list[float],
+    failure: object,
+) -> None:
+    # 受け入れ条件：タイムアウト・5xx でリトライ。1 回失敗しても、次で取れれば通常の応答。
+    route = open_meteo.get(FORECAST_URL).mock(
+        side_effect=[failure, httpx.Response(200, json=forecast("tokyo"))]
+    )
+
+    response = client.get("/weather", params={"city": "tokyo"})
+
+    assert response.status_code == 200
+    assert (response.json()["cached"], response.json()["stale"]) == (False, False)
+    assert route.call_count == 2
+    assert waits == [0.5]
+
+
+def test_weather_failure_without_cache_returns_502_after_retries(
+    client: TestClient, open_meteo: respx.MockRouter
+) -> None:
+    # 受け入れ条件：外部APIの失敗かつ使えるキャッシュがなければ 502。
+    route = open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
+
+    response = client.get("/weather", params={"city": "tokyo"})
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "upstream_error"
+    assert route.call_count == 3
+
+
+def test_weather_stale_is_per_city(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    # 東京の保存値を、ベルリンの stale として返さない。
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    route.mock(return_value=httpx.Response(500))
+    clock.now = FIXED_NOW + timedelta(minutes=20)
+    berlin = client.get("/weather", params={"city": "berlin"})
+    tokyo = client.get("/weather", params={"city": "tokyo"})
+
+    assert berlin.status_code == 502
+    assert tokyo.status_code == 200
+    assert (tokyo.json()["city"], tokyo.json()["stale"]) == ("tokyo", True)
+
+
+def test_weather_recovers_after_stale(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    route.mock(return_value=httpx.Response(500))
+    clock.now = FIXED_NOW + timedelta(minutes=20)
+    stale = client.get("/weather", params={"city": "tokyo"}).json()
+    route.mock(return_value=httpx.Response(200, json=forecast("tokyo")))
+    clock.now = FIXED_NOW + timedelta(minutes=25)
+    recovered = client.get("/weather", params={"city": "tokyo"}).json()
+
+    assert stale["stale"] is True
+    assert (recovered["cached"], recovered["stale"]) == (False, False)
+    assert recovered["fetched_at"] == "2026-10-12T15:27:30Z"
+
+
+def test_weather_uses_configured_stale_max_age(
+    client: TestClient, open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    # CACHE_STALE_MAX_AGE_S の値が、リクエストの処理まで届くこと（6 時間の直書きにならない）。
+    _use_settings(cache_ttl_s=60, cache_stale_max_age_s=120)
+    route = _mock_ok(open_meteo, forecast("tokyo"))
+    clock = FakeClock(FIXED_NOW)
+    _use_clock(clock)
+    client.get("/weather", params={"city": "tokyo"})
+
+    route.mock(return_value=httpx.Response(500))
+    clock.now = FIXED_NOW + timedelta(seconds=120)
+    at_limit = client.get("/weather", params={"city": "tokyo"})
+    clock.now = FIXED_NOW + timedelta(seconds=121)
+    over_limit = client.get("/weather", params={"city": "tokyo"})
+
+    assert at_limit.status_code == 200
+    assert at_limit.json()["stale"] is True
+    assert over_limit.status_code == 502
+
+
+def test_openapi_includes_stale(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    weather = schema["components"]["schemas"]["WeatherResponse"]
+    assert weather["properties"]["stale"]["type"] == "boolean"
+    assert "stale" in weather["required"]

@@ -42,4 +42,6 @@ async def get_weather(
     settings: Annotated[Settings, Depends(get_settings)],
     city: City = City.TOKYO,
 ) -> WeatherResponse:
-    return await weather_service.get_weather(city, client, clock, cache, settings.cache_ttl_s)
+    return await weather_service.get_weather(
+        city, client, clock, cache, settings.cache_ttl_s, settings.cache_stale_max_age_s
+    )

@@ -2,7 +2,14 @@ import pytest
 
 from app.config import Settings
 
-CACHE_ENV = ("CACHE_BACKEND", "CACHE_TTL_S", "REDIS_URL", "REDIS_TIMEOUT_S")
+CACHE_ENV = (
+    "CACHE_BACKEND",
+    "CACHE_TTL_S",
+    "CACHE_STALE_MAX_AGE_S",
+    "REDIS_URL",
+    "REDIS_TIMEOUT_S",
+)
+RETRY_ENV = ("OPEN_METEO_MAX_RETRIES", "OPEN_METEO_RETRY_BACKOFF_S")
 # 実在しない接続先と、秘密ではないダミーのパスワード。値が表示されないことの確認に使う。
 DUMMY_PASSWORD = "dummy-password"
 DUMMY_REDIS_URL = f"redis://:{DUMMY_PASSWORD}@localhost:6379/0"
@@ -15,6 +22,7 @@ def test_settings_defaults_match_spec(monkeypatch: pytest.MonkeyPatch) -> None:
         "OPEN_METEO_TOTAL_TIMEOUT_S",
         "LOG_LEVEL",
         *CACHE_ENV,
+        *RETRY_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -29,6 +37,11 @@ def test_settings_defaults_match_spec(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.cache_ttl_s == 900
     assert settings.redis_url is None
     assert settings.redis_timeout_s == 1.0
+    # spec.md「7. 外部API・データ」：リトライは最大 2 回。待ち時間の基準は 0.5 秒。
+    assert settings.open_meteo_max_retries == 2
+    assert settings.open_meteo_retry_backoff_s == 0.5
+    # spec.md「6. キャッシュ」：stale は最大 6 時間前まで。
+    assert settings.cache_stale_max_age_s == 21600
 
 
 def test_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,3 +143,55 @@ def test_settings_invalid_redis_url_error_does_not_show_value(
         Settings(_env_file=None)
 
     assert DUMMY_PASSWORD not in str(excinfo.value)
+
+
+def test_settings_read_retry_and_stale_values_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPEN_METEO_MAX_RETRIES", "0")
+    monkeypatch.setenv("OPEN_METEO_RETRY_BACKOFF_S", "0.1")
+    monkeypatch.setenv("CACHE_STALE_MAX_AGE_S", "3600")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.open_meteo_max_retries == 0
+    assert settings.open_meteo_retry_backoff_s == 0.1
+    assert settings.cache_stale_max_age_s == 3600
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        # リトライ回数は 0 以上で、上限（5 回）つき。
+        ("OPEN_METEO_MAX_RETRIES", "-1"),
+        ("OPEN_METEO_MAX_RETRIES", "6"),
+        ("OPEN_METEO_MAX_RETRIES", "1.5"),
+        ("OPEN_METEO_MAX_RETRIES", "abc"),
+        ("OPEN_METEO_RETRY_BACKOFF_S", "0"),
+        ("OPEN_METEO_RETRY_BACKOFF_S", "-1"),
+        ("OPEN_METEO_RETRY_BACKOFF_S", "abc"),
+        ("CACHE_STALE_MAX_AGE_S", "0"),
+        ("CACHE_STALE_MAX_AGE_S", "-1"),
+        ("CACHE_STALE_MAX_AGE_S", "abc"),
+    ],
+)
+def test_settings_reject_invalid_retry_and_stale_values(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(("stale_max_age_s", "valid"), [("899", False), ("900", True)])
+def test_settings_stale_max_age_must_not_be_shorter_than_ttl(
+    monkeypatch: pytest.MonkeyPatch, stale_max_age_s: str, valid: bool
+) -> None:
+    # stale の上限が TTL より短いと、TTL 内の値が「古すぎる」ことになってしまう。
+    monkeypatch.setenv("CACHE_TTL_S", "900")
+    monkeypatch.setenv("CACHE_STALE_MAX_AGE_S", stale_max_age_s)
+
+    if valid:
+        assert Settings(_env_file=None).cache_stale_max_age_s == 900
+    else:
+        with pytest.raises(ValueError):
+            Settings(_env_file=None)

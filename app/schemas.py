@@ -58,8 +58,10 @@ class WeatherResponse(BaseModel):
     daily: list[DailyForecast]
     source: Literal["open-meteo"]
     fetched_at: datetime
-    # 外部APIを呼ばずにキャッシュから返したとき true。
+    # キャッシュの値を返したとき true。
     cached: bool
+    # 外部APIが失敗し、TTL を過ぎた保存値を返したとき true。
+    stale: bool
 
 
 class ErrorDetail(BaseModel):
