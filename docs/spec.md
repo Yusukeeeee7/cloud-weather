@@ -291,7 +291,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR・push | ruff、mypy、pytest（カバレッジ）、nbmake、pip-audit、docker build |
+| `ci.yml` | PR | ruff、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、docker build。nbmake は最初のノートブック（#8）で追加する |
 | `cd.yml` | main へのマージ・タグ | イメージをビルド → コンテナ起動してスモークテスト → ghcr.io へ push |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
@@ -300,7 +300,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | # | 機能 | 受け入れ条件 | 状態 |
 |---|---|---|---|
 | 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 完了 |
-| 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 未着手 |
+| 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 進行中（ci.yml 導入済み。PR での実行確認とブランチ保護の設定が残っている） |
 | 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 未着手 |
 | 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 未着手 |
 | 5 | キャッシュ | TTL 内は外部APIを呼ばない。メモリ → Redis に切り替え可能 | 未着手 |
