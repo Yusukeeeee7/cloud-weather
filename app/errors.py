@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.cities import City
+from app.date_range import MAX_DATE, MIN_DATE
 from app.schemas import ErrorDetail, ErrorResponse
 
 
@@ -15,8 +16,18 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
+def _invalid_fields(exc: Exception) -> set[str]:
+    if not isinstance(exc, RequestValidationError):
+        return set()
+    return {str(part) for error in exc.errors() for part in error["loc"]}
+
+
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
-    # 入力は city だけなので、検証エラーはすべて invalid_city。入力値は応答に含めない。
+    # 入力値は応答に含めない。city と date の両方が不正なときは invalid_city。
+    fields = _invalid_fields(exc)
+    if "date" in fields and "city" not in fields:
+        message = f"date must be YYYY-MM-DD between {MIN_DATE} and {MAX_DATE}"
+        return _error_response(422, "invalid_date", message)
     allowed = ", ".join(city.value for city in City)
     return _error_response(422, "invalid_city", f"city must be one of: {allowed}")
 
