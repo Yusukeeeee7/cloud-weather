@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Dockerfile の uv のバージョンと合わせる（Dependabot はこの行を更新しない）。
+          version: "0.13.0"
+
+      # 速く終わるものから順に実行する。途中で失敗したら後続は実行されない。
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        run: uv run mypy app ml
+
+      - name: Pytest (coverage)
+        run: uv run pytest --cov=app --cov=ml
+
+      - name: pip-audit
+        run: uv run pip-audit --progress-spinner off
+
+      - name: Docker build
+        run: docker build --tag cloud-weather:ci .
