@@ -25,7 +25,7 @@ data/         生データ・加工データ（git管理外。01 で再取得で
 models/       学習済みモデル
 reports/      評価指標（metrics.json など）
 tests/        app/ と ml/ のテスト、fixtures/（外部APIの保存済みレスポンス）
-docs/         spec.md / dev-log.md / eda.md / model-card.md / features/
+docs/         spec.md / dev-log.md / plans/ / eda.md / model-card.md / features/
 .claude/      skills と settings
 ```
 
@@ -45,10 +45,10 @@ docker compose up --build                 # API + Redis
 ## 開発の進め方（必須）
 
 1. **1タスク = 1機能 = 1ブランチ = 1PR**。ブランチ名は `feat/<issue番号>-<短い名前>`。
-2. **実装前に計画を提示し、承認を待つ**。計画には変更ファイル・書くテスト・リスクを含める。
+2. **実装前に計画を `docs/plans/` に書き、承認を待つ**。承認済みの計画がない機能は実装しない。
 3. **TDD**：Red → Green → Refactor。テストを先に書き、失敗することを実行して確認してから実装する。
 4. **完了条件**：テスト・lint・型チェックがすべて通り、`docs/spec.md` の該当機能の受け入れ条件を満たすこと。
-5. skills を使う：新機能は `/new-feature`、PR前は `/review`、機能説明は `/explain-feature`、完了後は `/dev-log`。
+5. skills を使う：計画は `/plan-feature`、実装は `/implement-feature`、PR前は `/review`、機能説明は `/explain-feature`、完了後は `/dev-log`。
 6. `docs/spec.md` にない仕様を勝手に追加しない。不明点は推測せず質問する。
 
 ## コーディング規約
