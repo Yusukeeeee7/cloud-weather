@@ -3,12 +3,18 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from app.cities import CITIES, City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudCover, CurrentWeather, WeatherResponse
+from app.services.forecast import (
+    INVALID_RESPONSE_ERRORS,
+    build_daily,
+    build_hourly,
+    from_unix,
+)
 from app.services.weather_codes import classify_weather_code
 
 logger = logging.getLogger(__name__)
@@ -22,7 +28,8 @@ class _RawCurrent(BaseModel):
     # 数値の文字列や真偽値を数値として受け付けない。
     model_config = ConfigDict(strict=True)
 
-    time: str
+    # UNIX 秒（timeformat=unixtime）。
+    time: int
     temperature_2m: float
     apparent_temperature: float
     dew_point_2m: float
@@ -40,19 +47,11 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _parse_utc(value: str) -> datetime:
-    # timezone を指定せずに呼んでいるため、Open-Meteo の時刻は UTC（オフセットなしの ISO 8601）。
-    parsed = datetime.fromisoformat(value)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
-
-
 def _parse_current(raw: Mapping[str, Any]) -> tuple[_RawCurrent, datetime]:
     try:
         current = _RawCurrent.model_validate(raw.get("current"))
-        return current, _parse_utc(current.time)
-    except (ValidationError, ValueError) as exc:
+        return current, from_unix(current.time)
+    except INVALID_RESPONSE_ERRORS as exc:
         logger.warning("open-meteo response is missing required current fields")
         raise UpstreamError("invalid current") from exc
 
@@ -81,6 +80,8 @@ def build_weather_response(
                 high=current.cloud_cover_high,
             ),
         ),
+        hourly=build_hourly(raw, fetched_at),
+        daily=build_daily(raw),
         source="open-meteo",
         fetched_at=fetched_at.astimezone(UTC).replace(microsecond=0),
     )

@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -25,10 +25,10 @@ REQUIRED_FIELDS = [
 
 
 def test_fixture_matches_requested_units(forecast: Callable[[str], RawForecast]) -> None:
-    # 契約の確認：保存した実レスポンスが、前提にしている単位と UTC になっている。
+    # 契約の確認：保存した実レスポンスが、前提にしている単位と時刻形式（UNIX 秒）になっている。
     for city in ("tokyo", "berlin"):
         raw = forecast(city)
-        assert raw["utc_offset_seconds"] == 0
+        assert raw["current_units"]["time"] == "unixtime"
         assert raw["current_units"]["wind_speed_10m"] == "m/s"
         assert raw["current_units"]["temperature_2m"] == "°C"
         assert raw["current_units"]["precipitation"] == "mm"
@@ -67,9 +67,20 @@ def test_service_time_is_utc(forecast: Callable[[str], RawForecast]) -> None:
 
     response = build_weather_response(City.TOKYO, raw, FIXED_NOW)
 
-    expected = datetime.fromisoformat(raw["current"]["time"]).replace(tzinfo=UTC)
+    expected = datetime.fromtimestamp(raw["current"]["time"], UTC)
     assert response.current.time == expected
     assert response.current.time.utcoffset() == UTC.utcoffset(None)
+
+
+def test_service_current_time_is_close_to_fetch_time(
+    forecast: Callable[[str], RawForecast],
+) -> None:
+    # タイムゾーンを渡しても current.time が現地時刻として読まれていない（数時間ずれていない）こと。
+    # Open-Meteo の current は 15 分間隔（interval 900 秒）に丸めた時刻を返す。
+    for city in (City.TOKYO, City.BERLIN):
+        response = build_weather_response(city, forecast(city.value), FIXED_NOW)
+
+        assert abs(FIXED_NOW - response.current.time) <= timedelta(minutes=15)
 
 
 def test_service_fetched_at_drops_sub_seconds(forecast: Callable[[str], RawForecast]) -> None:
@@ -154,7 +165,10 @@ def test_service_classifies_fixture_weather_code(forecast: Callable[[str], RawFo
         ("relative_humidity_2m", 80.5),
         ("cloud_cover", 4.5),
         ("weather_code", "0"),
-        ("time", 1760275800),
+        # 時刻は UNIX 秒（整数）で受け取る。文字列・真偽値・小数は受け付けない。
+        ("time", "2026-10-12T13:30"),
+        ("time", True),
+        ("time", 1791813600.5),
     ],
 )
 def test_service_loosely_typed_value_raises_upstream_error(

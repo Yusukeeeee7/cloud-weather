@@ -24,6 +24,26 @@ CURRENT_VARIABLES = (
     "cloud_cover_high",
     "wind_speed_10m",
 )
+HOURLY_VARIABLES = (
+    "temperature_2m",
+    "precipitation_probability",
+    "precipitation",
+    "weather_code",
+    "cloud_cover",
+    "cloud_cover_low",
+    "cloud_cover_mid",
+    "cloud_cover_high",
+)
+DAILY_VARIABLES = (
+    "weather_code",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "precipitation_sum",
+    "precipitation_probability_max",
+    "sunrise",
+    "sunset",
+)
+FORECAST_DAYS = 7
 
 
 def build_http_client(settings: Settings) -> httpx.AsyncClient:
@@ -54,7 +74,14 @@ class OpenMeteoClient:
             "latitude": info.latitude,
             "longitude": info.longitude,
             "current": ",".join(CURRENT_VARIABLES),
+            "hourly": ",".join(HOURLY_VARIABLES),
+            "daily": ",".join(DAILY_VARIABLES),
             "wind_speed_unit": "ms",
+            # daily を現地の日付で区切るためにタイムゾーンを渡す。時刻は UNIX 秒で受け取り、
+            # 現地時刻の文字列を UTC に直すときの曖昧さ（夏時間の終わり）を避ける。
+            "timezone": info.timezone,
+            "timeformat": "unixtime",
+            "forecast_days": FORECAST_DAYS,
         }
 
     async def _get(self, path: str, params: dict[str, str | float]) -> httpx.Response:
