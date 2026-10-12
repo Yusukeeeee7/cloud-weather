@@ -1,0 +1,2 @@
+# 外部APIの応答は取得したまま保つ（改行を変換しない）。
+tests/fixtures/** -text

@@ -233,6 +233,21 @@ def test_clients_do_not_retry_4xx(
 
 
 @pytest.mark.parametrize("source", SOURCES)
+@pytest.mark.parametrize("failure", [httpx.DecodingError, httpx.TooManyRedirects])
+def test_clients_do_not_retry_non_transport_errors(
+    open_meteo: respx.MockRouter, waits: list[float], source: str, failure: type[Exception]
+) -> None:
+    # 通信の失敗ではないエラー（圧縮の壊れた応答など）は、繰り返しても直らない。
+    route = open_meteo.get(_url(source)).mock(side_effect=failure)
+
+    with pytest.raises(UpstreamError):
+        _fetch(source)
+
+    assert route.call_count == 1
+    assert waits == []
+
+
+@pytest.mark.parametrize("source", SOURCES)
 def test_clients_respect_configured_retries(open_meteo: respx.MockRouter, source: str) -> None:
     route = open_meteo.get(_url(source)).mock(return_value=httpx.Response(500))
 

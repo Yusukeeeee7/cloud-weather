@@ -358,3 +358,16 @@ spec.md「7. 外部API・データ」より（どちらも **未確認**。ブ�
   - この PC では `ml/` のテストを直接実行できない（Docker が要る）。確認用のイメージの定義はリポジトリにない。
   - API のイメージに pandas が入る（上の未決）。
   - 1 年ぶんの取得は、今回は 60 秒のタイムアウトに十分収まった（32 回で約 2 分）。混雑時（503）は試していない。
+
+### レビュー後の変更（2026-10-12、人間「推奨でお願いします」）
+
+レビューで「🔴 の 2 点と 🟡 の 5 点を修正案のとおり直す」を推奨として示し、そのとおり対応した。🟢 は対応していない。
+
+- **`Dockerfile.dev`（新規）と CLAUDE.md の「コマンド」**：pandas を読み込めない PC で、テスト・mypy・nbmake を Docker の中で実行するためのイメージの定義をリポジトリに入れた（作業用の場所に置いていたものと同じ内容に、非 root のユーザーを足した）。CLAUDE.md に実行方法を 3 行足した。このイメージで全チェックが通ることを確かめた。
+- **`Dockerfile`**：`uv sync` に `--no-group ml` を足した。ビルドして、API のイメージに pandas・pyarrow・numpy が入っていないこと、`app.main` を import できることを確かめた（イメージの中の `.venv` は 341 MB → 31 MB）。
+- **`nbstripout` を依存から外した**（どこからも使っていなかった。出力が残っていないことは `tests/test_notebooks.py` が確かめている）。
+- **テストを足した**：`test_clients_do_not_retry_non_transport_errors`（`DecodingError`・`TooManyRedirects` × 2 つのクライアント。1 回だけ呼んで `UpstreamError`）。実装が先にあるテストなので、その分岐をリトライするように壊して 4 件が失敗することを確かめ、元に戻した。`app/clients/bulk.py` のカバレッジは 94% → 100%。
+- **spec に書いた**：取得できる年は 1940〜2100 年（AI が決めていた値。レビューで示し、そのまま認める回答をもらった）。高さのない BKN・OVC の層の件は「未決（#9 で決める）」として件数と一緒に書いた。API のイメージに `ml` を入れないこと、`Dockerfile.dev` のこと。
+- **`.gitattributes`（新規）**：`tests/fixtures/**` の改行を変換しない。
+- 結果：782 件が通過、カバレッジ 99.23%、ruff・mypy・nbmake・pip-audit 問題なし（`Dockerfile.dev` のイメージの中）。
+- **対応していないもの**（🟢）：雲の量の値の前後の空白（`VV `）、`# type: ignore` 1 つ、spec の IEM の利用条件の注記（「All rights reserved」の表示）、METAR が正時より後になる行の申し送り、`tests/test_notebooks.py` の形だけに近い確認、同じ時刻に内容の違う報告が 2 つある場合の扱い。

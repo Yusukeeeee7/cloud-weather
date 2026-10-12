@@ -40,6 +40,10 @@ uv run pytest --nbmake notebooks/         # ノートブックの実行確認（
 uv run ruff check . && uv run ruff format --check .
 uv run mypy app ml
 docker compose up --build                 # API + Redis
+
+# pandas を読み込めない PC（Windows のアプリケーション制御ポリシー）では、テスト類を Docker の中で実行する
+docker build -f Dockerfile.dev -t cloud-weather-dev .
+docker run --rm -v "${PWD}:/work" cloud-weather-dev uv run --locked pytest --cov=app --cov=ml
 ```
 
 ## 開発の進め方（必須）
