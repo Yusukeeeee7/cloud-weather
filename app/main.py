@@ -1,6 +1,25 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from app.routers import health
+from app.clients.open_meteo import OpenMeteoClient, build_http_client
+from app.config import get_settings
+from app.errors import register_exception_handlers
+from app.logging_config import configure_logging
+from app.routers import health, weather
 
-app = FastAPI(title="cloud-weather")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    async with build_http_client(settings) as http:
+        app.state.open_meteo = OpenMeteoClient(http, settings)
+        yield
+
+
+app = FastAPI(title="cloud-weather", lifespan=lifespan)
+register_exception_handlers(app)
 app.include_router(health.router)
+app.include_router(weather.router)

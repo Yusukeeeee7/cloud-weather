@@ -5,6 +5,8 @@ description = "天気取得APIと雲底高度予測モデル"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "fastapi>=0.143.0",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.15.0",
     "uvicorn>=0.54.0",
 ]
 
@@ -27,10 +29,10 @@ fail_under = 80
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "mypy>=2.4.0",
     "pip-audit>=2.10.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
     "ruff>=0.17.0",
 ]
