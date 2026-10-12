@@ -18,6 +18,16 @@ FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 RawForecast = dict[str, Any]
 
 
+class FakeClock:
+    """テストで時刻を進めるための時計。`now` を書き換えると、次の呼び出しからその時刻を返す。"""
+
+    def __init__(self, now: datetime) -> None:
+        self.now = now
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
 def _load(name: str) -> RawForecast:
     path = FIXTURES_DIR / "open_meteo" / name
     raw: RawForecast = json.loads(path.read_text(encoding="utf-8"))

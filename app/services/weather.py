@@ -1,10 +1,11 @@
 import logging
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, ValidationError
 
+from app.cache import Cache, CacheError
 from app.cities import CITIES, City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
@@ -43,6 +44,16 @@ class _RawCurrent(BaseModel):
     wind_speed_10m: float
 
 
+class _CacheEntry(BaseModel):
+    """キャッシュに保存する形。整形前の応答と、外部APIから取得した時刻。"""
+
+    # 数値やタイムゾーンのない時刻を取得時刻として受け付けない。
+    model_config = ConfigDict(strict=True)
+
+    fetched_at: AwareDatetime
+    raw: dict[str, Any]
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -57,8 +68,14 @@ def _parse_current(raw: Mapping[str, Any]) -> tuple[_RawCurrent, datetime]:
 
 
 def build_weather_response(
-    city: City, raw: Mapping[str, Any], fetched_at: datetime
+    city: City,
+    raw: Mapping[str, Any],
+    fetched_at: datetime,
+    *,
+    now: datetime | None = None,
+    cached: bool = False,
 ) -> WeatherResponse:
+    """`now` は hourly の 24 件を選ぶ基準。省略時は取得時刻（いま取得した応答）。"""
     current, time = _parse_current(raw)
     return WeatherResponse(
         city=city.value,
@@ -80,13 +97,73 @@ def build_weather_response(
                 high=current.cloud_cover_high,
             ),
         ),
-        hourly=build_hourly(raw, fetched_at),
+        hourly=build_hourly(raw, fetched_at if now is None else now),
         daily=build_daily(raw),
         source="open-meteo",
         fetched_at=fetched_at.astimezone(UTC).replace(microsecond=0),
+        cached=cached,
     )
 
 
-async def get_weather(city: City, client: OpenMeteoClient, clock: Clock) -> WeatherResponse:
+def cache_key(city: City) -> str:
+    # 利用者が送った文字列ではなく、許可リスト（Enum）の値から作る。
+    return f"weather:{city.value}"
+
+
+async def _load_entry(cache: Cache, key: str) -> _CacheEntry | None:
+    try:
+        stored = await cache.get(key)
+    except CacheError:
+        # キャッシュの故障で API を止めない。例外の文面（接続先を含みうる）は出さない。
+        logger.warning("cache read failed; fetching from open-meteo")
+        return None
+    if stored is None:
+        return None
+    try:
+        return _CacheEntry.model_validate_json(stored)
+    except ValidationError:
+        logger.warning("cache entry is not in the expected format; ignoring it")
+        return None
+
+
+def _is_fresh(entry: _CacheEntry, now: datetime, ttl_s: int) -> bool:
+    # 取得時刻が未来（時計が戻ったなど）の保存値は使わない。TTL ちょうどは期限切れ。
+    return timedelta(0) <= now - entry.fetched_at < timedelta(seconds=ttl_s)
+
+
+async def _from_cache(
+    cache: Cache, city: City, now: datetime, ttl_s: int
+) -> WeatherResponse | None:
+    entry = await _load_entry(cache, cache_key(city))
+    if entry is None or not _is_fresh(entry, now, ttl_s):
+        return None
+    try:
+        # 保存してあるのは整形前の応答。hourly はいまの時刻で選び直す。
+        return build_weather_response(city, entry.raw, entry.fetched_at, now=now, cached=True)
+    except UpstreamError:
+        logger.warning("cached forecast is no longer usable; fetching from open-meteo")
+        return None
+
+
+async def _store(
+    cache: Cache, city: City, raw: dict[str, Any], fetched_at: datetime, ttl_s: int
+) -> None:
+    entry = _CacheEntry(fetched_at=fetched_at.astimezone(UTC), raw=raw)
+    try:
+        await cache.set(cache_key(city), entry.model_dump_json(), ttl_s)
+    except CacheError:
+        logger.warning("cache write failed; returning the response without caching")
+
+
+async def get_weather(
+    city: City, client: OpenMeteoClient, clock: Clock, cache: Cache, ttl_s: int
+) -> WeatherResponse:
+    cached = await _from_cache(cache, city, clock(), ttl_s)
+    if cached is not None:
+        return cached
     raw = await client.fetch_forecast(city)
-    return build_weather_response(city, raw, clock())
+    fetched_at = clock()
+    # 整形に成功した応答だけを保存する（壊れた応答を保存すると TTL の間 502 が続く）。
+    response = build_weather_response(city, raw, fetched_at)
+    await _store(cache, city, raw, fetched_at, ttl_s)
+    return response
