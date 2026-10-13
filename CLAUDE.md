@@ -20,7 +20,7 @@ pytest / respx / nbmake / ruff / mypy / Docker / docker compose / GitHub Actions
 ```
 app/          FastAPI（routers/, services/, clients/, cache/, notify/）
 ml/           ノートブックとAPIで共有するコード（features.py など）
-notebooks/    01_data_fetch → 02_eda → 03_baseline → 04_train → 05_evaluate
+notebooks/    01_data_fetch → 02_eda → 03_baseline → 04_train → 05_evaluate → 06_error_analysis
 data/         生データ・加工データ（git管理外。01 で再取得できる）
 models/       学習済みモデル
 reports/      評価指標（metrics.json など）
