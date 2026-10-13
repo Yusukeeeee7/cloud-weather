@@ -4,6 +4,9 @@ from typing import Any
 
 import pytest
 
+from ml import model
+from ml.features import FEATURE_NAMES
+
 NOTEBOOKS_DIR = Path(__file__).parent.parent / "notebooks"
 # 02_eda.ipynb だけは、出力を残してコミットする（CLAUDE.md「ノートブック」）。
 KEEPS_OUTPUTS = {"02_eda.ipynb"}
@@ -150,3 +153,134 @@ def test_baseline_report_has_no_test_year_local_paths_or_secrets() -> None:
     assert "redis://" not in text.lower()
     # NaN・Infinity を含まない（JSON として正しい）。
     json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
+
+
+REPORTS_DIR = NOTEBOOKS_DIR.parent / "reports"
+TRAINING_REPORT = REPORTS_DIR / "training.json"
+METRICS_REPORT = REPORTS_DIR / "metrics.json"
+MODEL_PATH = NOTEBOOKS_DIR.parent / "models" / "cloud_base.joblib"
+MODEL_PREDICTIONS = ("model", *BASELINE_PREDICTIONS)
+# docs/spec.md「9. 分割と評価」：学習 6 年と 3 年を、検証の年（2024）で比べる。
+CANDIDATES = {
+    "train_2018_2023": [2018, 2019, 2020, 2021, 2022, 2023],
+    "train_2021_2023": [2021, 2022, 2023],
+}
+SUCCESS_KEYS = {
+    "mae_improvement",
+    "meets_mae",
+    "mae_below_cap_improvement",
+    "meets_mae_below_cap",
+    "meets_both",
+}
+
+
+def _report(path: Path) -> dict[str, Any]:
+    report: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return report
+
+
+def _keys(value: Any) -> set[str]:
+    """入れ子の中も含めた、すべてのキー。"""
+    if isinstance(value, dict):
+        return set(value) | {key for item in value.values() for key in _keys(item)}
+    if isinstance(value, list):
+        return {key for item in value for key in _keys(item)}
+    return set()
+
+
+def _assert_has_cities_and_seasons(report: dict[str, Any]) -> None:
+    assert report["overall"]["n"] > 0
+    assert isinstance(report["overall"]["mae_m"], float)
+    assert sorted(report["by_city"]) == ["berlin", "tokyo"]
+    for metrics in report["by_city"].values():
+        assert metrics["n"] > 0
+        assert isinstance(metrics["mae_m"], float)
+        assert isinstance(metrics["mae_below_cap_m"], float)
+    assert sorted(report["by_city_season"]) == ["berlin", "tokyo"]
+    for seasons in report["by_city_season"].values():
+        assert sorted(seasons) == ["autumn", "spring", "summer", "winter"]
+
+
+def test_train_and_evaluate_notebooks_exist() -> None:
+    assert NOTEBOOKS_DIR / "04_train.ipynb" in STRIPPED
+    assert NOTEBOOKS_DIR / "05_evaluate.ipynb" in STRIPPED
+
+
+def test_training_report_was_made_from_full_data() -> None:
+    report = _report(TRAINING_REPORT)
+
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert report["model_version"] == model.MODEL_VERSION
+    assert report["feature_names"] == list(FEATURE_NAMES)
+    assert report["validation_years"] == [2024]
+    # 6 年と 3 年の両方を、検証の年で評価している。
+    candidates = report["candidates"]
+    assert {name: candidate["train_years"] for name, candidate in candidates.items()} == CANDIDATES
+    for candidate in candidates.values():
+        assert candidate["n_train"] > 0
+        assert candidate["best_iteration"] >= 1
+        _assert_has_cities_and_seasons(candidate["validation"])
+    assert report["selected"] in CANDIDATES
+    assert list(report["validation_baselines"]) == list(BASELINE_PREDICTIONS)
+    for baseline in report["validation_baselines"].values():
+        _assert_has_cities_and_seasons(baseline)
+    assert sorted(report["feature_importance"]) == sorted(FEATURE_NAMES)
+    # テストの年（2025）は、学習の結果に入れない。
+    assert "test" not in _keys(report)
+
+
+def test_metrics_report_was_made_from_full_data() -> None:
+    report = _report(METRICS_REPORT)
+
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert {name: part["years"] for name, part in report["splits"].items()} == {
+        "validation": [2024],
+        "test": [2025],
+    }
+    for part in report["splits"].values():
+        assert list(part["predictions"]) == list(MODEL_PREDICTIONS)
+        for prediction in part["predictions"].values():
+            _assert_has_cities_and_seasons(prediction)
+    # 成功基準は、テストの年で、都市ごとに判定する。
+    criteria = report["success_criteria"]
+    assert sorted(criteria) == ["berlin", "tokyo"]
+    for result in criteria.values():
+        assert set(result) == SUCCESS_KEYS
+        assert isinstance(result["mae_improvement"], float)
+        assert isinstance(result["mae_below_cap_improvement"], float)
+        assert isinstance(result["meets_both"], bool)
+        assert result["meets_both"] == (result["meets_mae"] and result["meets_mae_below_cap"])
+
+
+@pytest.mark.parametrize("path", [TRAINING_REPORT, METRICS_REPORT], ids=lambda path: path.name)
+def test_reports_have_no_local_paths_or_secrets(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+
+    for word in (
+        "C:\\",
+        "/home/",
+        "/Users/",
+        "/work",
+        "/venv",
+        "/tmp",
+        "DISCORD_WEBHOOK",
+        "password",
+    ):
+        assert word not in text
+    assert "redis://" not in text.lower()
+    # NaN・Infinity を含まない（JSON として正しい）。
+    json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
+
+
+def test_committed_model_matches_current_features_and_reports() -> None:
+    # 特徴量を変えたのにモデルを作り直していなければ、ここで気づく。
+    loaded = model.load(MODEL_PATH)
+    training = _report(TRAINING_REPORT)
+
+    assert loaded.feature_names == FEATURE_NAMES
+    assert loaded.model_version == model.MODEL_VERSION
+    assert loaded.cap_m == 1524.0
+    assert list(loaded.train_years) == CANDIDATES[training["selected"]]
+    assert _report(METRICS_REPORT)["model_version"] == loaded.model_version
