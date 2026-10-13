@@ -47,6 +47,7 @@ dev = [
     "ruff>=0.17.0",
 ]
 ml = [
+    "matplotlib>=3.11.2",
     "pandas>=3.0.6",
     "pyarrow>=26.0.0",
 ]
