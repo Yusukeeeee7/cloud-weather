@@ -1,0 +1,853 @@
+{
+  "mode": "full",
+  "cap_m": 1524.0,
+  "formula": "125 * (temperature_c - dew_point_c), clipped to [0, cap_m]",
+  "predictions": {
+    "rule_of_thumb": "baseline: formula with Open-Meteo temperature and dew point",
+    "always_cap": "reference: always cap_m",
+    "rule_of_thumb_metar": "reference: formula with METAR temperature and dew point"
+  },
+  "excluded_rows_all_years": {
+    "berlin": {
+      "height_unknown": 16,
+      "no_metar": 7,
+      "vertical_visibility": 68
+    },
+    "tokyo": {
+      "height_unknown": 11397,
+      "no_metar": 6
+    }
+  },
+  "vertical_visibility_with_bkn_or_ovc_all_years": 0,
+  "splits": {
+    "train": {
+      "years": [
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023
+      ],
+      "rows": {
+        "berlin": {
+          "below_cap": 15709,
+          "cap": 36792,
+          "excluded": 83
+        },
+        "tokyo": {
+          "below_cap": 12183,
+          "cap": 31936,
+          "excluded": 8465
+        }
+      },
+      "predictions": {
+        "rule_of_thumb": {
+          "overall": {
+            "n": 96620,
+            "mae_m": 690.39,
+            "n_below_cap": 27892,
+            "mae_below_cap_m": 369.33,
+            "below_predicted_below": 27843,
+            "below_predicted_cap": 49,
+            "cap_predicted_below": 62211,
+            "cap_predicted_cap": 6517,
+            "below_cap_accuracy": 0.36
+          },
+          "by_city": {
+            "berlin": {
+              "n": 52501,
+              "mae_m": 660.78,
+              "n_below_cap": 15709,
+              "mae_below_cap_m": 372.89,
+              "below_predicted_below": 15669,
+              "below_predicted_cap": 40,
+              "cap_predicted_below": 32044,
+              "cap_predicted_cap": 4748,
+              "below_cap_accuracy": 0.39
+            },
+            "tokyo": {
+              "n": 44119,
+              "mae_m": 725.63,
+              "n_below_cap": 12183,
+              "mae_below_cap_m": 364.74,
+              "below_predicted_below": 12174,
+              "below_predicted_cap": 9,
+              "cap_predicted_below": 30167,
+              "cap_predicted_cap": 1769,
+              "below_cap_accuracy": 0.32
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 13088,
+                "mae_m": 799.96,
+                "n_below_cap": 3871,
+                "mae_below_cap_m": 384.19,
+                "below_predicted_below": 3866,
+                "below_predicted_cap": 5,
+                "cap_predicted_below": 8841,
+                "cap_predicted_cap": 376,
+                "below_cap_accuracy": 0.32
+              },
+              "spring": {
+                "n": 13228,
+                "mae_m": 614.22,
+                "n_below_cap": 2951,
+                "mae_below_cap_m": 359.5,
+                "below_predicted_below": 2935,
+                "below_predicted_cap": 16,
+                "cap_predicted_below": 8813,
+                "cap_predicted_cap": 1464,
+                "below_cap_accuracy": 0.33
+              },
+              "summer": {
+                "n": 13238,
+                "mae_m": 554.12,
+                "n_below_cap": 1478,
+                "mae_below_cap_m": 342.08,
+                "below_predicted_below": 1459,
+                "below_predicted_cap": 19,
+                "cap_predicted_below": 8904,
+                "cap_predicted_cap": 2856,
+                "below_cap_accuracy": 0.33
+              },
+              "winter": {
+                "n": 12947,
+                "mae_m": 676.72,
+                "n_below_cap": 7409,
+                "mae_below_cap_m": 378.48,
+                "below_predicted_below": 7409,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 5486,
+                "cap_predicted_cap": 52,
+                "below_cap_accuracy": 0.58
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 11238,
+                "mae_m": 769.15,
+                "n_below_cap": 3418,
+                "mae_below_cap_m": 389.08,
+                "below_predicted_below": 3418,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 7638,
+                "cap_predicted_cap": 182,
+                "below_cap_accuracy": 0.32
+              },
+              "spring": {
+                "n": 11114,
+                "mae_m": 689.18,
+                "n_below_cap": 3188,
+                "mae_below_cap_m": 352.49,
+                "below_predicted_below": 3183,
+                "below_predicted_cap": 5,
+                "cap_predicted_below": 7306,
+                "cap_predicted_cap": 620,
+                "below_cap_accuracy": 0.34
+              },
+              "summer": {
+                "n": 9935,
+                "mae_m": 797.0,
+                "n_below_cap": 3522,
+                "mae_below_cap_m": 321.92,
+                "below_predicted_below": 3522,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 6328,
+                "cap_predicted_cap": 85,
+                "below_cap_accuracy": 0.36
+              },
+              "winter": {
+                "n": 11832,
+                "mae_m": 658.61,
+                "n_below_cap": 2055,
+                "mae_below_cap_m": 416.63,
+                "below_predicted_below": 2051,
+                "below_predicted_cap": 4,
+                "cap_predicted_below": 8895,
+                "cap_predicted_cap": 882,
+                "below_cap_accuracy": 0.25
+              }
+            }
+          }
+        },
+        "always_cap": {
+          "overall": {
+            "n": 96620,
+            "mae_m": 244.82,
+            "n_below_cap": 27892,
+            "mae_below_cap_m": 848.08,
+            "below_predicted_below": 0,
+            "below_predicted_cap": 27892,
+            "cap_predicted_below": 0,
+            "cap_predicted_cap": 68728,
+            "below_cap_accuracy": 0.71
+          },
+          "by_city": {
+            "berlin": {
+              "n": 52501,
+              "mae_m": 256.65,
+              "n_below_cap": 15709,
+              "mae_below_cap_m": 857.76,
+              "below_predicted_below": 0,
+              "below_predicted_cap": 15709,
+              "cap_predicted_below": 0,
+              "cap_predicted_cap": 36792,
+              "below_cap_accuracy": 0.7
+            },
+            "tokyo": {
+              "n": 44119,
+              "mae_m": 230.74,
+              "n_below_cap": 12183,
+              "mae_below_cap_m": 835.6,
+              "below_predicted_below": 0,
+              "below_predicted_cap": 12183,
+              "cap_predicted_below": 0,
+              "cap_predicted_cap": 31936,
+              "below_cap_accuracy": 0.72
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 13088,
+                "mae_m": 257.54,
+                "n_below_cap": 3871,
+                "mae_below_cap_m": 870.74,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 3871,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 9217,
+                "below_cap_accuracy": 0.7
+              },
+              "spring": {
+                "n": 13228,
+                "mae_m": 170.48,
+                "n_below_cap": 2951,
+                "mae_below_cap_m": 764.17,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 2951,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 10277,
+                "below_cap_accuracy": 0.78
+              },
+              "summer": {
+                "n": 13238,
+                "mae_m": 82.09,
+                "n_below_cap": 1478,
+                "mae_below_cap_m": 735.27,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 1478,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 11760,
+                "below_cap_accuracy": 0.89
+              },
+              "winter": {
+                "n": 12947,
+                "mae_m": 522.29,
+                "n_below_cap": 7409,
+                "mae_below_cap_m": 912.68,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 7409,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 5538,
+                "below_cap_accuracy": 0.43
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 11238,
+                "mae_m": 244.1,
+                "n_below_cap": 3418,
+                "mae_below_cap_m": 802.57,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 3418,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 7820,
+                "below_cap_accuracy": 0.7
+              },
+              "spring": {
+                "n": 11114,
+                "mae_m": 239.01,
+                "n_below_cap": 3188,
+                "mae_below_cap_m": 833.23,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 3188,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 7926,
+                "below_cap_accuracy": 0.71
+              },
+              "summer": {
+                "n": 9935,
+                "mae_m": 330.77,
+                "n_below_cap": 3522,
+                "mae_below_cap_m": 933.06,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 3522,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 6413,
+                "below_cap_accuracy": 0.65
+              },
+              "winter": {
+                "n": 11832,
+                "mae_m": 126.3,
+                "n_below_cap": 2055,
+                "mae_below_cap_m": 727.19,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 2055,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 9777,
+                "below_cap_accuracy": 0.83
+              }
+            }
+          }
+        },
+        "rule_of_thumb_metar": {
+          "overall": {
+            "n": 96618,
+            "mae_m": 622.36,
+            "n_below_cap": 27892,
+            "mae_below_cap_m": 367.87,
+            "below_predicted_below": 27849,
+            "below_predicted_cap": 43,
+            "cap_predicted_below": 58783,
+            "cap_predicted_cap": 9943,
+            "below_cap_accuracy": 0.39
+          },
+          "by_city": {
+            "berlin": {
+              "n": 52499,
+              "mae_m": 648.99,
+              "n_below_cap": 15709,
+              "mae_below_cap_m": 368.31,
+              "below_predicted_below": 15684,
+              "below_predicted_cap": 25,
+              "cap_predicted_below": 30907,
+              "cap_predicted_cap": 5883,
+              "below_cap_accuracy": 0.41
+            },
+            "tokyo": {
+              "n": 44119,
+              "mae_m": 590.66,
+              "n_below_cap": 12183,
+              "mae_below_cap_m": 367.3,
+              "below_predicted_below": 12165,
+              "below_predicted_cap": 18,
+              "cap_predicted_below": 27876,
+              "cap_predicted_cap": 4060,
+              "below_cap_accuracy": 0.37
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 13087,
+                "mae_m": 817.37,
+                "n_below_cap": 3871,
+                "mae_below_cap_m": 386.63,
+                "below_predicted_below": 3870,
+                "below_predicted_cap": 1,
+                "cap_predicted_below": 8715,
+                "cap_predicted_cap": 501,
+                "below_cap_accuracy": 0.33
+              },
+              "spring": {
+                "n": 13227,
+                "mae_m": 571.33,
+                "n_below_cap": 2951,
+                "mae_below_cap_m": 355.62,
+                "below_predicted_below": 2943,
+                "below_predicted_cap": 8,
+                "cap_predicted_below": 8165,
+                "cap_predicted_cap": 2111,
+                "below_cap_accuracy": 0.38
+              },
+              "summer": {
+                "n": 13238,
+                "mae_m": 523.25,
+                "n_below_cap": 1478,
+                "mae_below_cap_m": 314.84,
+                "below_predicted_below": 1462,
+                "below_predicted_cap": 16,
+                "cap_predicted_below": 8522,
+                "cap_predicted_cap": 3238,
+                "below_cap_accuracy": 0.36
+              },
+              "winter": {
+                "n": 12947,
+                "mae_m": 686.71,
+                "n_below_cap": 7409,
+                "mae_below_cap_m": 374.46,
+                "below_predicted_below": 7409,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 5505,
+                "cap_predicted_cap": 33,
+                "below_cap_accuracy": 0.57
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 11238,
+                "mae_m": 661.75,
+                "n_below_cap": 3418,
+                "mae_below_cap_m": 398.42,
+                "below_predicted_below": 3416,
+                "below_predicted_cap": 2,
+                "cap_predicted_below": 7393,
+                "cap_predicted_cap": 427,
+                "below_cap_accuracy": 0.34
+              },
+              "spring": {
+                "n": 11114,
+                "mae_m": 568.62,
+                "n_below_cap": 3188,
+                "mae_below_cap_m": 369.34,
+                "below_predicted_below": 3187,
+                "below_predicted_cap": 1,
+                "cap_predicted_below": 6798,
+                "cap_predicted_cap": 1128,
+                "below_cap_accuracy": 0.39
+              },
+              "summer": {
+                "n": 9935,
+                "mae_m": 770.22,
+                "n_below_cap": 3522,
+                "mae_below_cap_m": 365.09,
+                "below_predicted_below": 3522,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 6354,
+                "cap_predicted_cap": 59,
+                "below_cap_accuracy": 0.36
+              },
+              "winter": {
+                "n": 11832,
+                "mae_m": 393.08,
+                "n_below_cap": 2055,
+                "mae_below_cap_m": 316.16,
+                "below_predicted_below": 2040,
+                "below_predicted_cap": 15,
+                "cap_predicted_below": 7331,
+                "cap_predicted_cap": 2446,
+                "below_cap_accuracy": 0.38
+              }
+            }
+          }
+        }
+      }
+    },
+    "validation": {
+      "years": [
+        2024
+      ],
+      "rows": {
+        "berlin": {
+          "below_cap": 2875,
+          "cap": 5907,
+          "excluded": 2
+        },
+        "tokyo": {
+          "below_cap": 1797,
+          "cap": 5484,
+          "excluded": 1503
+        }
+      },
+      "predictions": {
+        "rule_of_thumb": {
+          "overall": {
+            "n": 16063,
+            "mae_m": 688.13,
+            "n_below_cap": 4672,
+            "mae_below_cap_m": 358.08,
+            "below_predicted_below": 4662,
+            "below_predicted_cap": 10,
+            "cap_predicted_below": 10380,
+            "cap_predicted_cap": 1011,
+            "below_cap_accuracy": 0.35
+          },
+          "by_city": {
+            "berlin": {
+              "n": 8782,
+              "mae_m": 668.29,
+              "n_below_cap": 2875,
+              "mae_below_cap_m": 349.52,
+              "below_predicted_below": 2870,
+              "below_predicted_cap": 5,
+              "cap_predicted_below": 5313,
+              "cap_predicted_cap": 594,
+              "below_cap_accuracy": 0.39
+            },
+            "tokyo": {
+              "n": 7281,
+              "mae_m": 712.06,
+              "n_below_cap": 1797,
+              "mae_below_cap_m": 371.76,
+              "below_predicted_below": 1792,
+              "below_predicted_cap": 5,
+              "cap_predicted_below": 5067,
+              "cap_predicted_cap": 417,
+              "below_cap_accuracy": 0.3
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 2185,
+                "mae_m": 677.19,
+                "n_below_cap": 851,
+                "mae_below_cap_m": 313.78,
+                "below_predicted_below": 851,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1240,
+                "cap_predicted_cap": 94,
+                "below_cap_accuracy": 0.43
+              },
+              "spring": {
+                "n": 2205,
+                "mae_m": 737.25,
+                "n_below_cap": 413,
+                "mae_below_cap_m": 435.06,
+                "below_predicted_below": 413,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1629,
+                "cap_predicted_cap": 163,
+                "below_cap_accuracy": 0.26
+              },
+              "summer": {
+                "n": 2208,
+                "mae_m": 631.88,
+                "n_below_cap": 228,
+                "mae_below_cap_m": 398.74,
+                "below_predicted_below": 223,
+                "below_predicted_cap": 5,
+                "cap_predicted_below": 1645,
+                "cap_predicted_cap": 335,
+                "below_cap_accuracy": 0.25
+              },
+              "winter": {
+                "n": 2184,
+                "mae_m": 626.59,
+                "n_below_cap": 1383,
+                "mae_below_cap_m": 337.86,
+                "below_predicted_below": 1383,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 799,
+                "cap_predicted_cap": 2,
+                "below_cap_accuracy": 0.63
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 1921,
+                "mae_m": 753.62,
+                "n_below_cap": 623,
+                "mae_below_cap_m": 372.75,
+                "below_predicted_below": 623,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1284,
+                "cap_predicted_cap": 14,
+                "below_cap_accuracy": 0.33
+              },
+              "spring": {
+                "n": 1884,
+                "mae_m": 696.06,
+                "n_below_cap": 505,
+                "mae_below_cap_m": 369.83,
+                "below_predicted_below": 505,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1259,
+                "cap_predicted_cap": 120,
+                "below_cap_accuracy": 0.33
+              },
+              "summer": {
+                "n": 1522,
+                "mae_m": 854.83,
+                "n_below_cap": 387,
+                "mae_below_cap_m": 363.7,
+                "below_predicted_below": 387,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1111,
+                "cap_predicted_cap": 24,
+                "below_cap_accuracy": 0.27
+              },
+              "winter": {
+                "n": 1954,
+                "mae_m": 575.44,
+                "n_below_cap": 282,
+                "mae_below_cap_m": 384.11,
+                "below_predicted_below": 277,
+                "below_predicted_cap": 5,
+                "cap_predicted_below": 1413,
+                "cap_predicted_cap": 259,
+                "below_cap_accuracy": 0.27
+              }
+            }
+          }
+        },
+        "always_cap": {
+          "overall": {
+            "n": 16063,
+            "mae_m": 250.66,
+            "n_below_cap": 4672,
+            "mae_below_cap_m": 861.8,
+            "below_predicted_below": 0,
+            "below_predicted_cap": 4672,
+            "cap_predicted_below": 0,
+            "cap_predicted_cap": 11391,
+            "below_cap_accuracy": 0.71
+          },
+          "by_city": {
+            "berlin": {
+              "n": 8782,
+              "mae_m": 291.05,
+              "n_below_cap": 2875,
+              "mae_below_cap_m": 889.04,
+              "below_predicted_below": 0,
+              "below_predicted_cap": 2875,
+              "cap_predicted_below": 0,
+              "cap_predicted_cap": 5907,
+              "below_cap_accuracy": 0.67
+            },
+            "tokyo": {
+              "n": 7281,
+              "mae_m": 201.94,
+              "n_below_cap": 1797,
+              "mae_below_cap_m": 818.21,
+              "below_predicted_below": 0,
+              "below_predicted_cap": 1797,
+              "cap_predicted_below": 0,
+              "cap_predicted_cap": 5484,
+              "below_cap_accuracy": 0.75
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 2185,
+                "mae_m": 372.46,
+                "n_below_cap": 851,
+                "mae_below_cap_m": 956.31,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 851,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1334,
+                "below_cap_accuracy": 0.61
+              },
+              "spring": {
+                "n": 2205,
+                "mae_m": 123.61,
+                "n_below_cap": 413,
+                "mae_below_cap_m": 659.93,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 413,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1792,
+                "below_cap_accuracy": 0.81
+              },
+              "summer": {
+                "n": 2208,
+                "mae_m": 70.69,
+                "n_below_cap": 228,
+                "mae_below_cap_m": 684.6,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 228,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1980,
+                "below_cap_accuracy": 0.9
+              },
+              "winter": {
+                "n": 2184,
+                "mae_m": 601.44,
+                "n_below_cap": 1383,
+                "mae_below_cap_m": 949.77,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 1383,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 801,
+                "below_cap_accuracy": 0.37
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 1921,
+                "mae_m": 263.85,
+                "n_below_cap": 623,
+                "mae_below_cap_m": 813.57,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 623,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1298,
+                "below_cap_accuracy": 0.68
+              },
+              "spring": {
+                "n": 1884,
+                "mae_m": 227.31,
+                "n_below_cap": 505,
+                "mae_below_cap_m": 848.01,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 505,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1379,
+                "below_cap_accuracy": 0.73
+              },
+              "summer": {
+                "n": 1522,
+                "mae_m": 225.84,
+                "n_below_cap": 387,
+                "mae_below_cap_m": 888.17,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 387,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1135,
+                "below_cap_accuracy": 0.75
+              },
+              "winter": {
+                "n": 1954,
+                "mae_m": 98.01,
+                "n_below_cap": 282,
+                "mae_below_cap_m": 679.1,
+                "below_predicted_below": 0,
+                "below_predicted_cap": 282,
+                "cap_predicted_below": 0,
+                "cap_predicted_cap": 1672,
+                "below_cap_accuracy": 0.86
+              }
+            }
+          }
+        },
+        "rule_of_thumb_metar": {
+          "overall": {
+            "n": 16063,
+            "mae_m": 616.64,
+            "n_below_cap": 4672,
+            "mae_below_cap_m": 343.53,
+            "below_predicted_below": 4668,
+            "below_predicted_cap": 4,
+            "cap_predicted_below": 10049,
+            "cap_predicted_cap": 1342,
+            "below_cap_accuracy": 0.37
+          },
+          "by_city": {
+            "berlin": {
+              "n": 8782,
+              "mae_m": 652.28,
+              "n_below_cap": 2875,
+              "mae_below_cap_m": 331.5,
+              "below_predicted_below": 2875,
+              "below_predicted_cap": 0,
+              "cap_predicted_below": 5283,
+              "cap_predicted_cap": 624,
+              "below_cap_accuracy": 0.4
+            },
+            "tokyo": {
+              "n": 7281,
+              "mae_m": 573.66,
+              "n_below_cap": 1797,
+              "mae_below_cap_m": 362.79,
+              "below_predicted_below": 1793,
+              "below_predicted_cap": 4,
+              "cap_predicted_below": 4766,
+              "cap_predicted_cap": 718,
+              "below_cap_accuracy": 0.34
+            }
+          },
+          "by_city_season": {
+            "berlin": {
+              "autumn": {
+                "n": 2185,
+                "mae_m": 686.96,
+                "n_below_cap": 851,
+                "mae_below_cap_m": 300.41,
+                "below_predicted_below": 851,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1244,
+                "cap_predicted_cap": 90,
+                "below_cap_accuracy": 0.43
+              },
+              "spring": {
+                "n": 2205,
+                "mae_m": 690.09,
+                "n_below_cap": 413,
+                "mae_below_cap_m": 422.92,
+                "below_predicted_below": 413,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1583,
+                "cap_predicted_cap": 209,
+                "below_cap_accuracy": 0.28
+              },
+              "summer": {
+                "n": 2208,
+                "mae_m": 624.03,
+                "n_below_cap": 228,
+                "mae_below_cap_m": 394.13,
+                "below_predicted_below": 228,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1656,
+                "cap_predicted_cap": 324,
+                "below_cap_accuracy": 0.25
+              },
+              "winter": {
+                "n": 2184,
+                "mae_m": 607.99,
+                "n_below_cap": 1383,
+                "mae_below_cap_m": 313.01,
+                "below_predicted_below": 1383,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 800,
+                "cap_predicted_cap": 1,
+                "below_cap_accuracy": 0.63
+              }
+            },
+            "tokyo": {
+              "autumn": {
+                "n": 1921,
+                "mae_m": 639.43,
+                "n_below_cap": 623,
+                "mae_below_cap_m": 362.82,
+                "below_predicted_below": 623,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1232,
+                "cap_predicted_cap": 66,
+                "below_cap_accuracy": 0.36
+              },
+              "spring": {
+                "n": 1884,
+                "mae_m": 532.01,
+                "n_below_cap": 505,
+                "mae_below_cap_m": 366.02,
+                "below_predicted_below": 505,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1108,
+                "cap_predicted_cap": 271,
+                "below_cap_accuracy": 0.41
+              },
+              "summer": {
+                "n": 1522,
+                "mae_m": 793.89,
+                "n_below_cap": 387,
+                "mae_below_cap_m": 374.1,
+                "below_predicted_below": 387,
+                "below_predicted_cap": 0,
+                "cap_predicted_below": 1131,
+                "cap_predicted_cap": 4,
+                "below_cap_accuracy": 0.26
+              },
+              "winter": {
+                "n": 1954,
+                "mae_m": 377.61,
+                "n_below_cap": 282,
+                "mae_below_cap_m": 341.4,
+                "below_predicted_below": 278,
+                "below_predicted_cap": 4,
+                "cap_predicted_below": 1295,
+                "cap_predicted_cap": 377,
+                "below_cap_accuracy": 0.34
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
