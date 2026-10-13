@@ -33,6 +33,11 @@ HOURLY_VARIABLES = (
     "cloud_cover_low",
     "cloud_cover_mid",
     "cloud_cover_high",
+    # /cloud-base の特徴量に使う（/weather の応答には出さない）。
+    "dew_point_2m",
+    "relative_humidity_2m",
+    "pressure_msl",
+    "wind_speed_10m",
 )
 DAILY_VARIABLES = (
     "weather_code",

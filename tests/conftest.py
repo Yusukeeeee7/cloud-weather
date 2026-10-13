@@ -15,6 +15,10 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 # 秒未満を含む時刻にして、レスポンスで切り捨てられることも確かめられるようにする。
 FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 
+# /cloud-base 用の fixture（hourly に 4 項目を足した応答）を取得した時刻の直後。
+# 東京 2026-10-13T14:16:25Z、ベルリン 14:16:29Z。
+CLOUD_BASE_NOW = datetime(2026, 10, 13, 14, 16, 30, 123456, tzinfo=UTC)
+
 RawForecast = dict[str, Any]
 
 
@@ -40,6 +44,10 @@ def load_forecast(city: str) -> RawForecast:
 
 def load_forecast_iso8601(city: str) -> RawForecast:
     return _load(f"forecast_{city}_iso8601.json")
+
+
+def load_cloud_base_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_cloud_base.json")
 
 
 @pytest.fixture

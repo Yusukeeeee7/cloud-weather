@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -52,6 +53,23 @@ class _CacheEntry(BaseModel):
 
     fetched_at: AwareDatetime
     raw: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Source:
+    """整形に渡す応答が、どこから来たか。"""
+
+    # 外部APIから取得した時刻。
+    fetched_at: datetime
+    # 行を選ぶ基準の時刻。いま取得した応答では取得時刻と同じ。
+    now: datetime
+    cached: bool = False
+    stale: bool = False
+
+
+# 整形前の応答を、エンドポイントの応答にする関数（`/weather` と `/cloud-base` で違う）。
+# その応答が使えなければ UpstreamError。
+type Builder[T] = Callable[[Mapping[str, Any], Source], T]
 
 
 def utc_now() -> datetime:
@@ -138,33 +156,32 @@ def _is_usable_as_stale(entry: _CacheEntry, now: datetime, stale_max_age_s: int)
     return timedelta(0) <= now - entry.fetched_at <= timedelta(seconds=stale_max_age_s)
 
 
-def _from_entry(
-    city: City, entry: _CacheEntry, now: datetime, *, stale: bool
-) -> WeatherResponse | None:
+def _from_entry[T](
+    entry: _CacheEntry, now: datetime, build: Builder[T], *, stale: bool
+) -> T | None:
     try:
         # 保存してあるのは整形前の応答。hourly はいまの時刻で選び直す。
-        return build_weather_response(
-            city, entry.raw, entry.fetched_at, now=now, cached=True, stale=stale
-        )
+        source = Source(fetched_at=entry.fetched_at, now=now, cached=True, stale=stale)
+        return build(entry.raw, source)
     except UpstreamError:
         logger.warning("cached forecast is no longer usable")
         return None
 
 
-def _fresh_response(
-    city: City, entry: _CacheEntry | None, now: datetime, ttl_s: int
-) -> WeatherResponse | None:
+def _fresh_response[T](
+    entry: _CacheEntry | None, now: datetime, ttl_s: int, build: Builder[T]
+) -> T | None:
     if entry is None or not _is_fresh(entry, now, ttl_s):
         return None
-    return _from_entry(city, entry, now, stale=False)
+    return _from_entry(entry, now, build, stale=False)
 
 
-def _stale_response(
-    city: City, entry: _CacheEntry | None, now: datetime, stale_max_age_s: int
-) -> WeatherResponse | None:
+def _stale_response[T](
+    city: City, entry: _CacheEntry | None, now: datetime, stale_max_age_s: int, build: Builder[T]
+) -> T | None:
     if entry is None or not _is_usable_as_stale(entry, now, stale_max_age_s):
         return None
-    response = _from_entry(city, entry, now, stale=True)
+    response = _from_entry(entry, now, build, stale=True)
     if response is not None:
         age_s = int((now - entry.fetched_at).total_seconds())
         logger.warning("open-meteo failed; returning stale cache (%s, %d s old)", city.value, age_s)
@@ -181,6 +198,36 @@ async def _store(
         logger.warning("cache write failed; returning the response without caching")
 
 
+async def get_forecast[T](
+    city: City,
+    client: OpenMeteoClient,
+    clock: Clock,
+    cache: Cache,
+    ttl_s: int,
+    stale_max_age_s: int,
+    build: Builder[T],
+) -> T:
+    """新しい保存値があれば使い、なければ外部APIを呼ぶ。失敗したら古い保存値で代える。"""
+    entry = await _load_entry(cache, cache_key(city))
+    fresh = _fresh_response(entry, clock(), ttl_s, build)
+    if fresh is not None:
+        return fresh
+    try:
+        raw = await client.fetch_forecast(city)
+        fetched_at = clock()
+        # 整形に成功した応答だけを保存する（壊れた応答を保存すると 502 が続く）。
+        response = build(raw, Source(fetched_at=fetched_at, now=fetched_at))
+    except UpstreamError:
+        # 外部APIの失敗・壊れた応答のときは、上限までの古い保存値で代える。なければ 502。
+        stale = _stale_response(city, entry, clock(), stale_max_age_s, build)
+        if stale is None:
+            raise
+        return stale
+    # 新しいかどうかは取得時刻で判定する。保存先の期限は、stale の上限まで残すためのもの。
+    await _store(cache, city, raw, fetched_at, stale_max_age_s)
+    return response
+
+
 async def get_weather(
     city: City,
     client: OpenMeteoClient,
@@ -189,21 +236,9 @@ async def get_weather(
     ttl_s: int,
     stale_max_age_s: int,
 ) -> WeatherResponse:
-    entry = await _load_entry(cache, cache_key(city))
-    fresh = _fresh_response(city, entry, clock(), ttl_s)
-    if fresh is not None:
-        return fresh
-    try:
-        raw = await client.fetch_forecast(city)
-        fetched_at = clock()
-        # 整形に成功した応答だけを保存する（壊れた応答を保存すると 502 が続く）。
-        response = build_weather_response(city, raw, fetched_at)
-    except UpstreamError:
-        # 外部APIの失敗・壊れた応答のときは、上限までの古い保存値で代える。なければ 502。
-        stale = _stale_response(city, entry, clock(), stale_max_age_s)
-        if stale is None:
-            raise
-        return stale
-    # 新しいかどうかは取得時刻で判定する。保存先の期限は、stale の上限まで残すためのもの。
-    await _store(cache, city, raw, fetched_at, stale_max_age_s)
-    return response
+    def build(raw: Mapping[str, Any], source: Source) -> WeatherResponse:
+        return build_weather_response(
+            city, raw, source.fetched_at, now=source.now, cached=source.cached, stale=source.stale
+        )
+
+    return await get_forecast(city, client, clock, cache, ttl_s, stale_max_age_s, build)
