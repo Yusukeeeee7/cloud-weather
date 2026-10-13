@@ -211,7 +211,7 @@ def test_training_report_was_made_from_full_data() -> None:
 
     assert report["mode"] == "full"
     assert report["cap_m"] == 1524.0
-    assert report["model_version"] == model.MODEL_VERSION
+    assert report["model_version"] == model.MODEL_VERSION_V1
     assert report["feature_names"] == list(FEATURE_NAMES)
     assert report["validation_years"] == [2024]
     # 6 年と 3 年の両方を、検証の年で評価している。
@@ -274,13 +274,20 @@ def test_reports_have_no_local_paths_or_secrets(path: Path) -> None:
     json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
 
 
-def test_committed_model_matches_current_features_and_reports() -> None:
+def _v1_model_path() -> Path:
+    """v1（#11）のモデルのファイル。新しいモデルを採った後は、名前を変えて残す（#17）。"""
+    if model.MODEL_VERSION == model.MODEL_VERSION_V1:
+        return MODEL_PATH
+    return MODEL_PATH.with_name("cloud_base_v1.joblib")
+
+
+def test_v1_model_matches_current_features_and_reports() -> None:
     # 特徴量を変えたのにモデルを作り直していなければ、ここで気づく。
-    loaded = model.load(MODEL_PATH)
+    loaded = model.load(_v1_model_path())
     training = _report(TRAINING_REPORT)
 
     assert loaded.feature_names == FEATURE_NAMES
-    assert loaded.model_version == model.MODEL_VERSION
+    assert loaded.model_version == model.MODEL_VERSION_V1
     assert loaded.cap_m == 1524.0
     assert list(loaded.train_years) == CANDIDATES[training["selected"]]
     assert _report(METRICS_REPORT)["model_version"] == loaded.model_version
@@ -302,7 +309,7 @@ def test_error_analysis_report_was_made_from_full_data() -> None:
     assert report["mode"] == "full"
     assert report["cap_m"] == 1524.0
     assert report["years"] == [2024]
-    assert report["model_version"] == model.MODEL_VERSION
+    assert report["model_version"] == model.MODEL_VERSION_V1
     assert report["model_version"] == _report(METRICS_REPORT)["model_version"]
     assert list(report["predictions"]) == list(ERROR_ANALYSIS_PREDICTIONS)
     for prediction in report["predictions"].values():
@@ -363,3 +370,249 @@ def test_error_analysis_report_has_no_local_paths_or_secrets() -> None:
     assert "redis://" not in text.lower()
     # NaN・Infinity を含まない（JSON として正しい）。
     json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
+
+
+# ここから下は #17（docs/plans/17-model-improvement.md）。
+IMPROVEMENT_REPORT = REPORTS_DIR / "improvement.json"
+METRICS_IMPROVED_REPORT = REPORTS_DIR / "metrics_improved.json"
+CITY_NAMES = ("berlin", "tokyo")
+# 「検証のしかた」：2 つの年で順に検証する。
+IMPROVE_FOLDS = {
+    "validation_2023": {
+        "train_years": [2018, 2019, 2020, 2021, 2022],
+        "validation_years": [2023],
+    },
+    "validation_2024": {
+        "train_years": [2018, 2019, 2020, 2021, 2022, 2023],
+        "validation_years": [2024],
+    },
+}
+# 「比べる設定」の表（順も同じ）。
+IMPROVE_SETTINGS = {
+    "current": {"kind": "current", "below_cap_weight": None, "below_cap_threshold": None},
+    "weighted_2": {"kind": "weighted", "below_cap_weight": 2.0, "below_cap_threshold": None},
+    "weighted_4": {"kind": "weighted", "below_cap_weight": 4.0, "below_cap_threshold": None},
+    "weighted_8": {"kind": "weighted", "below_cap_weight": 8.0, "below_cap_threshold": None},
+    "two_stage_50": {"kind": "two_stage", "below_cap_weight": None, "below_cap_threshold": 0.5},
+    "two_stage_40": {"kind": "two_stage", "below_cap_weight": None, "below_cap_threshold": 0.4},
+    "two_stage_30": {"kind": "two_stage", "below_cap_weight": None, "below_cap_threshold": 0.3},
+}
+IMPROVE_BASELINES = ("rule_of_thumb", "always_cap")
+IMPROVED_PREDICTIONS = ("model", "previous_model", "rule_of_thumb", "always_cap")
+BY_CITY_KEYS = ("n", "mae_m", "n_below_cap", "mae_below_cap_m")
+
+
+def _by_city(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """都市ごとの、行数と MAE（ほかの成果物と突き合わせる値）。"""
+    return {
+        city: {key: report["by_city"][city][key] for key in BY_CITY_KEYS} for city in CITY_NAMES
+    }
+
+
+def test_improve_notebooks_exist() -> None:
+    assert NOTEBOOKS_DIR / "07_improve.ipynb" in STRIPPED
+    assert NOTEBOOKS_DIR / "08_evaluate_improved.ipynb" in STRIPPED
+
+
+def test_improvement_report_was_made_from_full_data() -> None:
+    report = _report(IMPROVEMENT_REPORT)
+
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert report["feature_names"] == list(FEATURE_NAMES)
+    assert report["reference_model_version"] == model.MODEL_VERSION_V1
+    assert report["folds"] == IMPROVE_FOLDS
+    assert report["settings"] == IMPROVE_SETTINGS
+    assert list(report["settings"]) == list(IMPROVE_SETTINGS)
+    assert report["selection_rule"]["min_improvement"] == 0.1
+    assert list(report["results"]) == list(IMPROVE_SETTINGS)
+    for name, setting in IMPROVE_SETTINGS.items():
+        assert list(report["results"][name]) == list(IMPROVE_FOLDS)
+        for result in report["results"][name].values():
+            assert result["n_train"] > 0
+            assert result["best_iteration"] >= 1
+            if setting["kind"] == "two_stage":
+                assert result["best_iteration_classifier"] >= 1
+            else:
+                assert result["best_iteration_classifier"] is None
+            _assert_has_cities_and_seasons(result["validation"])
+            assert sorted(result["criteria"]) == list(CITY_NAMES)
+            for criteria in result["criteria"].values():
+                assert set(criteria) == SUCCESS_KEYS
+                assert isinstance(criteria["mae_improvement"], float)
+                assert isinstance(criteria["mae_below_cap_improvement"], float)
+    assert list(report["validation_baselines"]) == list(IMPROVE_FOLDS)
+    for baselines in report["validation_baselines"].values():
+        assert list(baselines) == list(IMPROVE_BASELINES)
+        for baseline in baselines.values():
+            _assert_has_cities_and_seasons(baseline)
+
+
+def test_improvement_report_selection_follows_the_rule() -> None:
+    # 「選ぶ決まり」の 1〜4 が、ファイルの中の判定と合っている。
+    report = _report(IMPROVEMENT_REPORT)
+    selection = report["selection"]
+
+    assert list(selection) == list(IMPROVE_SETTINGS)
+    for name in IMPROVE_SETTINGS:
+        judged = [
+            criteria
+            for result in report["results"][name].values()
+            for criteria in result["criteria"].values()
+        ]
+        assert len(judged) == len(IMPROVE_FOLDS) * len(CITY_NAMES)
+        assert selection[name]["eligible"] == all(item["meets_mae"] is True for item in judged)
+        assert selection[name]["score"] == min(item["mae_below_cap_improvement"] for item in judged)
+    current = selection["current"]["score"]
+    eligible = {
+        name: selection[name]["score"]
+        for name in IMPROVE_SETTINGS
+        if name != "current" and selection[name]["eligible"]
+    }
+    selected = report["selected"]
+    if selected is None:
+        # 値は小数 4 桁に丸めてある。選ばれていないなら、`current` を上回るものはない。
+        assert all(score <= current for score in eligible.values())
+    else:
+        assert eligible[selected] == max(eligible.values())
+        assert eligible[selected] >= current
+        # 同じ点なら、表の上のもの。
+        assert selected == next(name for name in eligible if eligible[name] == eligible[selected])
+
+
+def test_improvement_report_reference_matches_training_report() -> None:
+    # `current` は v1 と同じ設定・同じ年なので、04 の結果と同じになる。違えば環境か実装の誤り。
+    ours = _report(IMPROVEMENT_REPORT)["results"]["current"]["validation_2024"]
+    theirs = _report(TRAINING_REPORT)["candidates"]["train_2018_2023"]
+
+    assert ours["n_train"] == theirs["n_train"]
+    assert ours["best_iteration"] == theirs["best_iteration"]
+    assert ours["validation"] == theirs["validation"]
+
+
+def test_improvement_report_has_no_test_year() -> None:
+    # docs/spec.md「9. モデルの改善」：案と設定を選ぶのに、テストの年（2025）を使わない。
+    report = _report(IMPROVEMENT_REPORT)
+
+    assert "test" not in _keys(report)
+    assert not any("2025" in key for key in _keys(report))
+    for fold in report["folds"].values():
+        assert 2025 not in fold["train_years"]
+        assert 2025 not in fold["validation_years"]
+
+
+def test_metrics_improved_exists_only_when_a_setting_was_selected() -> None:
+    # 「選ぶ決まり」の 4：選ばれた設定がなければ、テストの年は評価しない。
+    selected = _report(IMPROVEMENT_REPORT)["selected"]
+
+    assert METRICS_IMPROVED_REPORT.exists() == (selected is not None)
+
+
+def test_metrics_improved_report_was_made_from_full_data() -> None:
+    if not METRICS_IMPROVED_REPORT.exists():
+        # テストの年に進まなかった（上のテストが、そのことを確かめている）。
+        return
+    report = _report(METRICS_IMPROVED_REPORT)
+
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert report["model_version"] == model.MODEL_VERSION_V2
+    assert report["previous_model_version"] == model.MODEL_VERSION_V1
+    assert report["setting"] == _report(IMPROVEMENT_REPORT)["selected"]
+    assert report["train_years"] == IMPROVE_FOLDS["validation_2024"]["train_years"]
+    # 2025 年は #11 で 1 回見ている。
+    assert report["test_year_evaluation"] == "second"
+    assert list(report["predictions"]) == list(IMPROVED_PREDICTIONS)
+    assert {name: part["years"] for name, part in report["splits"].items()} == {
+        "validation": [2024],
+        "test": [2025],
+    }
+    for part in report["splits"].values():
+        assert list(part["predictions"]) == list(IMPROVED_PREDICTIONS)
+        for prediction in part["predictions"].values():
+            _assert_has_cities_and_seasons(prediction)
+    assert report["success_criteria_split"] == "test"
+    assert report["success_criteria_min_improvement"] == 0.1
+    for name in ("success_criteria", "previous_success_criteria"):
+        assert sorted(report[name]) == list(CITY_NAMES)
+        for result in report[name].values():
+            assert set(result) == SUCCESS_KEYS
+            assert isinstance(result["meets_both"], bool)
+            assert result["meets_both"] == (result["meets_mae"] and result["meets_mae_below_cap"])
+    # 「選ぶ決まり」の 6：2 都市とも成功基準を満たしたときだけ採る。
+    assert report["adopted"] is all(
+        result["meets_both"] for result in report["success_criteria"].values()
+    )
+
+
+def test_metrics_improved_previous_model_matches_metrics_report() -> None:
+    if not METRICS_IMPROVED_REPORT.exists():
+        return
+    # v1 の側は、同じモデル・同じ年なので、05 の結果と同じになる。
+    ours, theirs = _report(METRICS_IMPROVED_REPORT), _report(METRICS_REPORT)
+
+    assert ours["previous_model_version"] == theirs["model_version"]
+    assert ours["previous_success_criteria"] == theirs["success_criteria"]
+    for name in ("validation", "test"):
+        for ours_label, theirs_label in (
+            ("previous_model", "model"),
+            ("rule_of_thumb", "rule_of_thumb"),
+            ("always_cap", "always_cap"),
+        ):
+            assert (
+                ours["splits"][name]["predictions"][ours_label]
+                == theirs["splits"][name]["predictions"][theirs_label]
+            )
+
+
+def test_metrics_improved_validation_matches_improvement_report() -> None:
+    if not METRICS_IMPROVED_REPORT.exists():
+        return
+    # 評価したのは、07 で選んだ設定の、`validation_2024` で学習したモデル。
+    ours = _report(METRICS_IMPROVED_REPORT)
+    improvement = _report(IMPROVEMENT_REPORT)
+    theirs = improvement["results"][improvement["selected"]]["validation_2024"]["validation"]
+
+    assert _by_city(ours["splits"]["validation"]["predictions"]["model"]) == _by_city(theirs)
+
+
+def test_new_reports_have_no_local_paths_or_secrets() -> None:
+    paths = [IMPROVEMENT_REPORT]
+    if METRICS_IMPROVED_REPORT.exists():
+        paths.append(METRICS_IMPROVED_REPORT)
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        for word in (
+            "C:\\",
+            "/home/",
+            "/Users/",
+            "/work",
+            "/venv",
+            "/tmp",
+            "DISCORD_WEBHOOK",
+            "password",
+        ):
+            assert word not in text
+        assert "redis://" not in text.lower()
+        # NaN・Infinity を含まない（JSON として正しい）。
+        json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
+
+
+def test_served_model_matches_adoption() -> None:
+    # API が読むファイル。採ったときだけ、新しいモデルに替わる。
+    adopted = (
+        METRICS_IMPROVED_REPORT.exists() and _report(METRICS_IMPROVED_REPORT)["adopted"] is True
+    )
+    loaded = model.load(MODEL_PATH)
+
+    assert (model.MODEL_VERSION == model.MODEL_VERSION_V2) == adopted
+    assert loaded.model_version == model.MODEL_VERSION
+    assert loaded.feature_names == FEATURE_NAMES
+    assert loaded.cap_m == 1524.0
+    if adopted:
+        report = _report(METRICS_IMPROVED_REPORT)
+        assert loaded.model_version == report["model_version"]
+        assert list(loaded.train_years) == report["train_years"]
+    else:
+        assert loaded.model_version == _report(METRICS_REPORT)["model_version"]

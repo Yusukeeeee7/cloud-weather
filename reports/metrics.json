@@ -11,7 +11,7 @@
   ],
   "cap_m": 1524.0,
   "predictions": {
-    "model": "LightGBM (models/cloud_base.joblib), clipped to [0, cap_m]",
+    "model": "LightGBM (models/cloud_base_v1.joblib), clipped to [0, cap_m]",
     "rule_of_thumb": "baseline: 125 * (temperature_c - dew_point_c) with Open-Meteo values",
     "always_cap": "reference: always cap_m",
     "rule_of_thumb_metar": "reference: formula with METAR temperature and dew point"

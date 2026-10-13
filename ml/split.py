@@ -33,6 +33,14 @@ def split(observations: pd.DataFrame) -> pd.Series:
 TRAIN_YEARS_SHORT: tuple[int, ...] = (2021, 2022, 2023)
 
 
+# 設定を選ぶときの検証（#17）。名前 → （学習の年, 検証の年）。テストの年は入れない。
+# 最後の 1 つは、上の分割（学習 2018〜2023、検証 2024）と同じ。
+ROLLING_FOLDS: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {
+    "validation_2023": ((2018, 2019, 2020, 2021, 2022), (2023,)),
+    "validation_2024": (SPLIT_YEARS[TRAIN], SPLIT_YEARS[VALIDATION]),
+}
+
+
 def rows_in_years(observations: pd.DataFrame, years: tuple[int, ...]) -> pd.Series:
     """`time`（UTC）の年が `years` に入っている行が True。"""
     return _utc_year(observations).isin(years).rename("in_years")

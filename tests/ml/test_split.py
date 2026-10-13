@@ -60,6 +60,23 @@ def test_split_rejects_naive_or_non_utc_times() -> None:
             split.split(table)
 
 
+def test_rolling_folds_follow_plan() -> None:
+    # docs/plans/17-model-improvement.md「検証のしかた」：2 つの年で順に検証する。
+    assert split.ROLLING_FOLDS == {
+        "validation_2023": ((2018, 2019, 2020, 2021, 2022), (2023,)),
+        "validation_2024": ((2018, 2019, 2020, 2021, 2022, 2023), (2024,)),
+    }
+    for train_years, validation_years in split.ROLLING_FOLDS.values():
+        assert max(train_years) < min(validation_years)
+        # テストの年は、どこにも入れない。
+        assert not set(split.SPLIT_YEARS["test"]) & {*train_years, *validation_years}
+    # 最後の 1 つは、spec の分割と同じ。
+    assert split.ROLLING_FOLDS["validation_2024"] == (
+        split.SPLIT_YEARS["train"],
+        split.SPLIT_YEARS["validation"],
+    )
+
+
 def test_short_train_years_follow_spec() -> None:
     # docs/spec.md「9. 分割と評価」：学習を 2021〜2023（3 年）にした場合と比べる。
     assert split.TRAIN_YEARS_SHORT == (2021, 2022, 2023)
