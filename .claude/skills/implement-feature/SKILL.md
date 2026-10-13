@@ -1,12 +1,12 @@
 ---
 name: implement-feature
-description: docs/plans/ にある承認済みの計画に沿って、1つの機能を TDD（Red→Green→Refactor）で実装するときに使う。機能番号を受け取る。
+description: docs/plans/ にある承認済みの計画に沿って、1つの機能を TDD（Red→Green→Refactor）で実装するときに使う。機能番号と Issue 番号を受け取る。
 ---
 
 # implement-feature：承認済みの計画を TDD で実装する
 
 ## 入力
-- 機能番号（例：`3`）
+- 機能番号（例：`3`）と Issue 番号（ブランチ名に使う。なければ止まって聞く）
 
 ## 手順
 

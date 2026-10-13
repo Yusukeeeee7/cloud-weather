@@ -284,3 +284,82 @@ def test_committed_model_matches_current_features_and_reports() -> None:
     assert loaded.cap_m == 1524.0
     assert list(loaded.train_years) == CANDIDATES[training["selected"]]
     assert _report(METRICS_REPORT)["model_version"] == loaded.model_version
+
+
+ERROR_ANALYSIS_REPORT = REPORTS_DIR / "error_analysis.json"
+# docs/plans/16-error-analysis.md の質問 5：モデルと概算式の 2 つを並べる。
+ERROR_ANALYSIS_PREDICTIONS = ("model", "rule_of_thumb")
+HEIGHT_BANDS = ["0_300", "300_600", "600_1000", "1000_1524"]
+
+
+def test_error_analysis_notebook_exists() -> None:
+    assert NOTEBOOKS_DIR / "06_error_analysis.ipynb" in STRIPPED
+
+
+def test_error_analysis_report_was_made_from_full_data() -> None:
+    report = _report(ERROR_ANALYSIS_REPORT)
+
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert report["years"] == [2024]
+    assert report["model_version"] == model.MODEL_VERSION
+    assert report["model_version"] == _report(METRICS_REPORT)["model_version"]
+    assert list(report["predictions"]) == list(ERROR_ANALYSIS_PREDICTIONS)
+    for prediction in report["predictions"].values():
+        assert prediction["overall"]["n_below_cap"] > 0
+        assert sorted(prediction["by_city"]) == ["berlin", "tokyo"]
+        for city in ("berlin", "tokyo"):
+            assert prediction["by_city"][city]["n_below_cap"] > 0
+            assert isinstance(prediction["by_city"][city]["mae_below_cap_m"], float)
+            assert list(prediction["by_city_band"][city]) == HEIGHT_BANDS
+            assert sorted(prediction["by_city_season"][city]) == [
+                "autumn",
+                "spring",
+                "summer",
+                "winter",
+            ]
+            for bands in prediction["by_city_season_band"][city].values():
+                assert list(bands) == HEIGHT_BANDS
+
+
+def test_error_analysis_report_matches_metrics_report() -> None:
+    # 同じモデル・同じ検証の年なので、上限より下の行の数と MAE は 05 の結果と同じになる。
+    report = _report(ERROR_ANALYSIS_REPORT)
+    validation = _report(METRICS_REPORT)["splits"]["validation"]["predictions"]
+
+    for name in ERROR_ANALYSIS_PREDICTIONS:
+        for city in ("berlin", "tokyo"):
+            ours, theirs = (
+                report["predictions"][name]["by_city"][city],
+                validation[name]["by_city"][city],
+            )
+            assert ours["n_below_cap"] == theirs["n_below_cap"]
+            assert ours["mae_below_cap_m"] == theirs["mae_below_cap_m"]
+
+
+def test_error_analysis_report_has_no_test_year() -> None:
+    # docs/spec.md「9. モデルの改善」：#16 はテストの年（2025）を読まない。
+    report = _report(ERROR_ANALYSIS_REPORT)
+
+    assert "test" not in _keys(report)
+    assert not any("2025" in key for key in _keys(report))
+    assert 2025 not in report["years"]
+
+
+def test_error_analysis_report_has_no_local_paths_or_secrets() -> None:
+    text = ERROR_ANALYSIS_REPORT.read_text(encoding="utf-8")
+
+    for word in (
+        "C:\\",
+        "/home/",
+        "/Users/",
+        "/work",
+        "/venv",
+        "/tmp",
+        "DISCORD_WEBHOOK",
+        "password",
+    ):
+        assert word not in text
+    assert "redis://" not in text.lower()
+    # NaN・Infinity を含まない（JSON として正しい）。
+    json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
