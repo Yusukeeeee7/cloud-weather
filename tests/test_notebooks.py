@@ -92,3 +92,61 @@ def test_eda_notebook_was_run_on_full_data() -> None:
     ]
 
     assert lines == ["mode=full"]
+
+
+BASELINE_REPORT = NOTEBOOKS_DIR.parent / "reports" / "baseline.json"
+# 成功基準を決める前にテストの年（2025）の数値を見ない（docs/plans/10-baseline.md の質問 3）。
+BASELINE_SPLITS = ("train", "validation")
+BASELINE_PREDICTIONS = ("rule_of_thumb", "always_cap", "rule_of_thumb_metar")
+
+
+def _baseline_report() -> dict[str, Any]:
+    report: dict[str, Any] = json.loads(BASELINE_REPORT.read_text(encoding="utf-8"))
+    return report
+
+
+def test_baseline_notebook_exists() -> None:
+    assert NOTEBOOKS_DIR / "03_baseline.ipynb" in STRIPPED
+
+
+def test_baseline_report_was_made_from_full_data() -> None:
+    report = _baseline_report()
+
+    # コミットするのは全期間の結果。上限は docs/spec.md「9. 目的変数」の 1,524 m。
+    assert report["mode"] == "full"
+    assert report["cap_m"] == 1524.0
+    assert list(report["splits"]) == list(BASELINE_SPLITS)
+    for split in BASELINE_SPLITS:
+        predictions = report["splits"][split]["predictions"]
+        assert list(predictions) == list(BASELINE_PREDICTIONS)
+        for name in BASELINE_PREDICTIONS:
+            assert predictions[name]["overall"]["n"] > 0
+            by_city = predictions[name]["by_city"]
+            assert sorted(by_city) == ["berlin", "tokyo"]
+            for metrics in by_city.values():
+                assert metrics["n"] > 0
+                assert isinstance(metrics["mae_m"], float)
+                assert isinstance(metrics["mae_below_cap_m"], float)
+            assert sorted(predictions[name]["by_city_season"]) == ["berlin", "tokyo"]
+            for seasons in predictions[name]["by_city_season"].values():
+                assert sorted(seasons) == ["autumn", "spring", "summer", "winter"]
+
+
+def test_baseline_report_has_no_test_year_local_paths_or_secrets() -> None:
+    text = BASELINE_REPORT.read_text(encoding="utf-8")
+
+    assert "test" not in _baseline_report()["splits"]
+    for word in (
+        "C:\\",
+        "/home/",
+        "/Users/",
+        "/work",
+        "/venv",
+        "/tmp",
+        "DISCORD_WEBHOOK",
+        "password",
+    ):
+        assert word not in text
+    assert "redis://" not in text.lower()
+    # NaN・Infinity を含まない（JSON として正しい）。
+    json.loads(text, parse_constant=lambda name: pytest.fail(f"unexpected constant: {name}"))
