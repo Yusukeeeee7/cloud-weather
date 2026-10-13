@@ -2,7 +2,7 @@ import datetime as dt
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services.weather_codes import WeatherCategory
 
@@ -89,6 +89,20 @@ class DaylightResponse(BaseModel):
     solar_noon: datetime
     solar_noon_elevation_deg: float
     method: Literal["noaa-solar-calculator"]
+
+
+class CloudBaseResponse(BaseModel):
+    city: str
+    # 予測した時刻（UTC の正時）。
+    valid_at: datetime = Field(description="Hour (UTC) the prediction is for.")
+    # どちらも 0〜1,524 m。1,524 は「それより下にシーリングがない」。
+    predicted_m: int = Field(
+        description="Predicted ceiling in metres, 0-1524. 1524 means no ceiling below 1524 m."
+    )
+    baseline_m: int = Field(
+        description="Rule of thumb 125 x (temperature - dew point) in metres, limited to 0-1524."
+    )
+    model_version: str
 
 
 class ErrorDetail(BaseModel):

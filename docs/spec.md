@@ -1,6 +1,6 @@
 # 仕様書（spec.md）
 
-最終更新：2026-10-13　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定。#8 でデータ取得の仕様を確定。#9 で目的変数と学習データの期間を確定。#11 で特徴量と学習の設定を確定し、テストの年の結果を記録）
+最終更新：2026-10-13　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定。#8 でデータ取得の仕様を確定。#9 で目的変数と学習データの期間を確定。#11 で特徴量と学習の設定を確定し、テストの年の結果を記録。#12 で `/cloud-base` の仕様を確定）
 
 ## 1. 目的
 
@@ -213,6 +213,25 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 `baseline_m` は概算式 `125 × (気温 − 露点)` による値。
 
+**#12 で決めたこと（2026-10-13）**
+
+- `city` を省略した場合は `tokyo`（`/weather`・`/daylight` と同じ）。空文字は 422 `invalid_city`。
+- `valid_at` は、**現在以前の最も近い正時**（現在が 13:41 なら 13:00。正時ちょうどならその時刻）。返すのはこの 1 つの時刻だけ。
+- 入力は、`/weather` と同じ 1 回の外部呼び出しの **`hourly` の、その時刻の 1 行**。`current` は使わない（15 分ごとのデータで、学習に使った「正時の値」「降水量は前の 1 時間の合計」と違うため）。
+  - 使う 10 項目：`temperature_2m`・`dew_point_2m`・`relative_humidity_2m`・`pressure_msl`・`wind_speed_10m`・`cloud_cover`・`cloud_cover_low`・`_mid`・`_high`・`precipitation`。列の名前は、学習データを作るとき（`ml/archive.py`）と同じ対応で付け、`ml/features.py` の `features` に渡す。
+  - **欠けた値では予測しない**。その行の 10 項目のどれかが欠けている・null・数値でない・NaN・無限大の場合、その時刻の行がない場合、列の長さが時刻と違う場合、単位（`hourly_units`）が学習のときと違う場合は、502 `upstream_error`。使わない行の null は見ない。
+- `predicted_m`・`baseline_m` は、どちらも **0〜1,524 m に収めた整数**（四捨五入。0.5 は切り上げ）。
+  - **`predicted_m` の 1524 は「1,524 m より下にシーリングがない」の意味**（9「目的変数」の上限）。応答に項目は足さず、ここと OpenAPI の説明に書く。
+  - `baseline_m` は `ml/baseline.py` の `baseline_m`（評価のときと同じ。露点差が負なら 0、上限を超えたら 1524）。上限のある `predicted_m` と並べて読めるようにするため。
+- **モデルは、成功基準に届いていないものをそのまま出す**（9「#11 の結果」。低いシーリングの高さは概算式より良くない）。`model_version` と `baseline_m` を並べて返し、限界は `docs/model-card.md` に書く。応答に注意書きの項目は足さない。
+- モデルは起動のときに 1 回だけ読む（パスはコードの定数 `models/cloud_base.joblib`。環境変数・利用者の入力から作らない。後から読み直さない）。読めなければ、警告ログを 1 行残して起動は続け、**`/cloud-base` だけが 503 `model_unavailable`**（`/health`・`/weather`・`/daylight` は動く）。応答・ログにパスと例外の文面は出さない。
+- 判定の順：`city` の検証（422）→ モデルの有無（503）→ 外部API。モデルがないときは外部APIを呼ばない。
+- キャッシュは `/weather` と同じ保存値（`weather:{city}`）・同じ決まり（TTL、stale の上限）を使う。どちらのエンドポイントが取得した値も、もう一方が使う。
+  - 外部APIが失敗したときは、上限（6 時間）までの保存値で予測を返す。`valid_at` はそのときの時刻で選び直す（古い予報の、その時刻の値を使う）。応答に `cached`・`stale`・`fetched_at` は足さない。
+  - 保存値が `/cloud-base` に使えない場合（#12 より前に保存された、4 項目のない値など）は、キャッシュなしとして外部APIを呼び直す。外部APIも失敗したら 502。
+  - 予測に使えない応答は保存しない。
+- 上の JSON の数値は形式を示す例で、実際の予測ではない。
+
 ## 6. キャッシュ
 
 - キー：`weather:{city}`、TTL：15分（現在・時間ごと・日ごとを 1 回の外部呼び出しでまとめて取得し、まとめてキャッシュする）
@@ -254,7 +273,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 用途 | 提供元 | エンドポイント・項目（候補） | 利用条件・制限 | 状態 |
 |---|---|---|---|---|
 | 予報（現在） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、`current=` に temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m。応答の `current.time` は UTC（`timezone` 未指定時、オフセットなしの ISO 8601） | 無料の API は非商用のみ。上限 600 回/分・5,000 回/時・10,000 回/日・300,000 回/月。API キー不要。データは CC BY 4.0（表示する場所に出典のリンクが必要） | 確認済み（2026-10-12、#3） |
-| 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から）。pressure_msl は未使用・未確認（#12 で確認する） | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
+| 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から）。#12 で足した 4 項目：dew_point_2m（℃）, relative_humidity_2m（%）, pressure_msl（hPa）, wind_speed_10m（`wind_speed_unit=ms` で m/s）。公式ドキュメントの表では precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」（過去データと同じ意味）。`current` は 15 分ごとのデータ（応答の `current.interval` が 900 秒、`current.time` も 15 分刻み）で、正時の値ではない | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合）。4 項目と値の意味は 2026-10-13、#12（同上） |
 | 予報（日ごと） | Open-Meteo Forecast | 同上、`daily=` に weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset。公式ドキュメントは「`daily` を指定するときは `timezone` が必須」としている（実際には指定しなくても 200 が返り、GMT の日付で区切られた。必ず指定する） | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 予報のオプション（風速の単位） | Open-Meteo Forecast | `wind_speed_unit=ms`（既定は km/h） | 同上 | 確認済み（2026-10-12、#3） |
 | 予報のオプション（その他） | Open-Meteo Forecast | `timezone=<IANA の名前>`（既定は GMT。日ごとの値がそのタイムゾーンの日付で区切られる）、`timeformat=unixtime`（既定は iso8601。時刻が UTC の UNIX 秒になる。`daily.time` に `utc_offset_seconds` を足すと日付になる。`utc_offset_seconds` は取得時点の UTC との差で、応答全体に 1 つだけ。日ごとの区切りもこの固定の差で行われ、夏時間の切り替えをまたいでも 24 時間おき＝切り替え後の日は現地の 0 時から 1 時間ずれた区切りになる）、`forecast_days=7`（既定 7、範囲 0〜16。17 は 400、0 は空の配列） | 同上 | 確認済み（2026-10-12、#4。同上） |
@@ -325,6 +344,13 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
   - 読み込みは `ml/model.py` の `load`。ファイルがない・読めない・形が違う・特徴量の一覧がいまのコードと違う場合は `ModelLoadError`（#12 の 503 `model_unavailable` のもと）。
 - 依存：`lightgbm`・`joblib` を依存グループ `ml` に足した（API のイメージには入らない。#12 で、API のイメージにどう入れるかを決める）。`Dockerfile.dev` に `libgomp1` を足した（LightGBM が読み込む。`python:3.14-slim` にはない）。
 - `pressure_msl_hpa` は、予報の API で取れるかが未確認（7 の表。#12 で確認する）。取れなければ、その特徴量を外して学習し直す。
+  - **#12 で確認した（2026-10-13）**：予報の `hourly` で、過去データと同じ名前・単位で取れる。特徴量は外さず、学習し直していない。
+
+**#12 で決めたこと（2026-10-13）：API のイメージと依存**
+
+- `pandas`・`lightgbm`・`joblib` は、API が実行時に使うので、依存グループ `ml` から `[project].dependencies` に移した（上の「依存グループ `ml` に足した」と、下の「データ取得」の pandas の記述は、#12 より前の状態）。`ml` に残るのは `pyarrow`・`matplotlib` で、API のイメージには入らない。新しく足したパッケージはない。
+- API のイメージ（`Dockerfile`）に、`libgomp1`（LightGBM が読み込む）と `models/` を入れる。大きさは 219 MB から 629 MB になった（2026-10-13 に手元で作ったもの）。
+- `app` を import すると pandas が読み込まれる。pandas を読み込めない PC では、`tests/app/` も `Dockerfile.dev` のイメージの中で実行する。
 
 ### ベースライン
 
@@ -333,7 +359,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 **#10 で決めたこと（2026-10-13。数値は `reports/baseline.json`）**
 
 - 入力は Open-Meteo の気温・露点（API の `baseline_m` と同じ）。値は目的変数と同じ範囲（0〜1,524 m）に収める（露点差が負なら 0、上限を超えたら 1,524）。`ml/baseline.py` の `baseline_m`。
-  - これは評価のときの範囲。API の応答（`/cloud-base` の `baseline_m`）で同じ範囲に収めるかどうかは #12 で決める。
+  - これは評価のときの範囲。API の応答（`/cloud-base` の `baseline_m`）で同じ範囲に収めるかどうかは #12 で決める。→ #12 で、同じ範囲に収めると決めた（5 の `/cloud-base`）。
 - 参考として、同じ表に 2 つ並べる：「いつも上限（1,524 m）と答える」、「METAR の気温・露点で計算した概算式」。
 - #10 で評価したのは学習（2018〜2023）と検証（2024）の年だけ。テストの年（2025）のベースラインは、#11 の `05_evaluate` で同じ関数を使って出す。
 - 結果（MAE、m）：
@@ -473,7 +499,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 9 | EDA | `02_eda` 完了、シーリングなしの扱いを決定し `docs/eda.md` に記録 | 完了 |
 | 10 | ベースライン | `03_baseline` で都市別 MAE を算出、評価関数をテスト付きで `ml/` に実装 | 完了 |
 | 11 | 学習・評価 | `04`・`05` 完了、ベースラインとの比較を `docs/model-card.md` に記録 | 完了（成功基準には届かなかった。`docs/model-card.md` 7 節） |
-| 12 | 推論API | `/cloud-base` が仕様どおりに返る。モデルなしで 503 | 未着手 |
+| 12 | 推論API | `/cloud-base` が仕様どおりに返る。モデルなしで 503 | 完了 |
 | 13 | Discord通知 | 毎朝通知が届く（天気・日照・雲底）。Webhook URL がログに出ない | 未着手 |
 | 14 | CD | main マージでスモークテスト後に ghcr.io へ push される | 未着手 |
 | 15 | UI（任意） | 現在の天気・予報・日照・雲底を表示する簡単な画面 | 未着手 |

@@ -18,7 +18,8 @@ EXPECTED_CURRENT = (
 )
 EXPECTED_HOURLY = (
     "temperature_2m,precipitation_probability,precipitation,weather_code,"
-    "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high"
+    "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+    "dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m"
 )
 EXPECTED_DAILY = (
     "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,"

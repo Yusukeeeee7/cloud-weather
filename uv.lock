@@ -278,6 +278,9 @@ default-groups = ["dev", "ml"]
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "joblib" },
+    { name = "lightgbm" },
+    { name = "pandas" },
     { name = "pydantic-settings" },
     { name = "redis" },
     { name = "tzdata" },
@@ -298,10 +301,7 @@ dev = [
     { name = "ruff" },
 ]
 ml = [
-    { name = "joblib" },
-    { name = "lightgbm" },
     { name = "matplotlib" },
-    { name = "pandas" },
     { name = "pyarrow" },
 ]
 
@@ -309,6 +309,9 @@ ml = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "joblib", specifier = ">=1.6.0" },
+    { name = "lightgbm", specifier = ">=4.7.0" },
+    { name = "pandas", specifier = ">=3.0.6" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "tzdata", specifier = ">=2026.5" },
@@ -329,10 +332,7 @@ dev = [
     { name = "ruff", specifier = ">=0.17.0" },
 ]
 ml = [
-    { name = "joblib", specifier = ">=1.6.0" },
-    { name = "lightgbm", specifier = ">=4.7.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
-    { name = "pandas", specifier = ">=3.0.6" },
     { name = "pyarrow", specifier = ">=26.0.0" },
 ]
 

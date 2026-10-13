@@ -11,6 +11,10 @@ class UpstreamError(Exception):
     """外部APIの呼び出しに失敗した、または応答が想定の形でなかった。"""
 
 
+class ModelUnavailableError(Exception):
+    """学習済みモデルを読み込めていない（起動のときに読めなかった）。"""
+
+
 def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
     body = ErrorResponse(error=ErrorDetail(code=code, message=message))
     return JSONResponse(status_code=status_code, content=body.model_dump())
@@ -37,6 +41,12 @@ async def _handle_upstream_error(request: Request, exc: Exception) -> JSONRespon
     return _error_response(502, "upstream_error", "weather provider is unavailable")
 
 
+async def _handle_model_unavailable(request: Request, exc: Exception) -> JSONResponse:
+    # ファイルの場所や例外の文面は応答に出さない。
+    return _error_response(503, "model_unavailable", "cloud base model is unavailable")
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.add_exception_handler(UpstreamError, _handle_upstream_error)
+    app.add_exception_handler(ModelUnavailableError, _handle_model_unavailable)

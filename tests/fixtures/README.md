@@ -14,6 +14,22 @@
 https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&timezone=<タイムゾーン>&timeformat=unixtime
 ```
 
+## 雲底高度の予測（#12 推論API）の入力
+
+`/cloud-base` は、`hourly` に 4 項目（`dew_point_2m`・`relative_humidity_2m`・`pressure_msl`・`wind_speed_10m`）を
+足した応答を使う。上の 4 つの fixture は足す前の形のまま残し（`/weather` のテストと、「4 項目のない保存値」の
+テストに使う）、足した後の形を別に取得した。応答は取得したまま。
+
+| ファイル | 取得日時（UTC） | 取得方法 |
+|---|---|---|
+| `open_meteo/forecast_tokyo_cloud_base.json` | 2026-10-13T14:16:25Z | `curl`、上の URL の `hourly=` の末尾に `,dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m` を足したもの（`latitude=35.55&longitude=139.78`、`timezone=Asia/Tokyo`、`timeformat=unixtime`） |
+| `open_meteo/forecast_berlin_cloud_base.json` | 2026-10-13T14:16:29Z | 同上で `latitude=52.36&longitude=13.50`、`timezone=Europe/Berlin` |
+
+- `hourly` は 168 行で null はない。東京の先頭は 2026-10-12T15:00Z（現地の 10-13 の 0 時）、ベルリンは 2026-10-12T22:00Z。
+- `tests/conftest.py` の `CLOUD_BASE_NOW` を取得時刻に合わせている。取り直したら変える。
+- 東京の先頭の行（2026-10-12T15:00Z）は、上の fixture の取得時刻（`FIXED_NOW`）の正時と同じ。
+  「4 項目のない保存値があるときに呼び直す」テストがこれに頼っているので、取り直すときは気をつける。
+
 ## 太陽計算（#7 日照）の期待値
 
 `/daylight` は外部APIを呼ばない。下のファイルは、計算結果を比べる相手として 1 回だけ取得したもの。
