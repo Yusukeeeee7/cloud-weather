@@ -27,6 +27,11 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.14"
 strict = true
 
+[[tool.mypy.overrides]]
+# joblib は型の情報を配っていない。
+module = ["joblib"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -47,6 +52,8 @@ dev = [
     "ruff>=0.17.0",
 ]
 ml = [
+    "joblib>=1.6.0",
+    "lightgbm>=4.7.0",
     "matplotlib>=3.11.2",
     "pandas>=3.0.6",
     "pyarrow>=26.0.0",

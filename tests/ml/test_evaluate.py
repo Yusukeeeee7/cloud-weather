@@ -234,3 +234,106 @@ def test_evaluate_does_not_modify_input() -> None:
     pd.testing.assert_frame_equal(observations, before[0])
     pd.testing.assert_series_equal(target, before[1])
     pd.testing.assert_series_equal(predicted, before[2])
+
+
+def _maes(mae_m: float | None, mae_below_cap_m: float | None) -> evaluate.Metrics:
+    """成功基準が見る 2 つの値だけを、手で決めた指標。"""
+    return {"n": 10, "mae_m": mae_m, "n_below_cap": 5, "mae_below_cap_m": mae_below_cap_m}
+
+
+def test_success_criteria_passes_when_both_are_met() -> None:
+    # 全体：いつも上限 100 に対して 80（20% 小さい）。
+    # 上限より下：概算式 200 に対して 150（25% 小さい）。
+    result = evaluate.success_criteria(
+        model=_maes(80.0, 150.0), always_cap=_maes(100.0, 800.0), baseline=_maes(700.0, 200.0)
+    )
+
+    assert result == {
+        "mae_improvement": pytest.approx(0.20),
+        "meets_mae": True,
+        "mae_below_cap_improvement": pytest.approx(0.25),
+        "meets_mae_below_cap": True,
+        "meets_both": True,
+    }
+
+
+def test_success_criteria_fails_when_one_is_missed() -> None:
+    always_cap, baseline = _maes(100.0, 800.0), _maes(700.0, 200.0)
+
+    # 全体だけ届かない（5% 小さい）。
+    only_below = evaluate.success_criteria(_maes(95.0, 150.0), always_cap, baseline)
+    # 上限より下だけ届かない（概算式より 5% 大きい）。
+    only_overall = evaluate.success_criteria(_maes(80.0, 210.0), always_cap, baseline)
+
+    assert (only_below["meets_mae"], only_below["meets_mae_below_cap"]) == (False, True)
+    assert only_below["meets_both"] is False
+    assert (only_overall["meets_mae"], only_overall["meets_mae_below_cap"]) == (True, False)
+    assert only_overall["meets_both"] is False
+    assert only_overall["mae_below_cap_improvement"] == pytest.approx(-0.05)
+
+
+def test_success_criteria_compares_with_the_right_reference() -> None:
+    # 全体は「いつも上限」と、上限より下は概算式と比べる（逆に比べると、どちらも満たさない）。
+    result = evaluate.success_criteria(
+        model=_maes(80.0, 150.0), always_cap=_maes(100.0, 100.0), baseline=_maes(50.0, 200.0)
+    )
+
+    assert result["meets_both"] is True
+
+
+def test_success_criteria_boundary_is_ten_percent() -> None:
+    # docs/spec.md「10% 以上小さい」：ちょうど 10% は満たす。
+    always_cap, baseline = _maes(100.0, 800.0), _maes(700.0, 100.0)
+
+    exact = evaluate.success_criteria(_maes(90.0, 90.0), always_cap, baseline)
+    short = evaluate.success_criteria(_maes(90.01, 90.01), always_cap, baseline)
+
+    assert (exact["meets_mae"], exact["meets_mae_below_cap"], exact["meets_both"]) == (
+        True,
+        True,
+        True,
+    )
+    assert (short["meets_mae"], short["meets_mae_below_cap"], short["meets_both"]) == (
+        False,
+        False,
+        False,
+    )
+
+
+@pytest.mark.parametrize("reference", [None, 0.0])
+def test_success_criteria_without_reference(reference: float | None) -> None:
+    # 比べる相手の MAE がない・0 のときは、判定しない（エラーにもしない）。
+    result = evaluate.success_criteria(
+        model=_maes(80.0, 150.0), always_cap=_maes(100.0, 800.0), baseline=_maes(700.0, reference)
+    )
+
+    assert result["meets_mae"] is True
+    assert result["mae_below_cap_improvement"] is None
+    assert result["meets_mae_below_cap"] is None
+    assert result["meets_both"] is None
+
+
+def test_success_criteria_without_model_value() -> None:
+    # モデルの側に値がない（上限より下の行がない）ときも、判定しない。
+    result = evaluate.success_criteria(
+        model=_maes(80.0, None), always_cap=_maes(100.0, None), baseline=_maes(700.0, None)
+    )
+
+    assert result["meets_mae_below_cap"] is None
+    assert result["meets_both"] is None
+
+
+def test_success_criteria_is_json_serializable() -> None:
+    target, predicted = meters(100.0, 200.0, CAP_M), meters(110.0, 180.0, CAP_M)
+    always_cap = meters(CAP_M, CAP_M, CAP_M)
+    baseline = meters(300.0, 400.0, 500.0)
+
+    result = evaluate.success_criteria(
+        evaluate.evaluate(target, predicted),
+        evaluate.evaluate(target, always_cap),
+        evaluate.evaluate(target, baseline),
+    )
+    text = json.dumps(result, allow_nan=False)
+
+    assert json.loads(text) == result
+    assert result["meets_both"] is True

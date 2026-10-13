@@ -22,6 +22,8 @@ METRICS = (
 )
 # `report` の小数の桁数（再実行で差分が出ないように丸める）。
 _REPORT_DIGITS = 2
+# 成功基準：比べる相手の MAE より、この割合以上小さい。
+SUCCESS_MIN_IMPROVEMENT = 0.10
 
 
 def _evaluated(target_m: pd.Series, predicted_m: pd.Series) -> tuple[pd.Series, pd.Series]:
@@ -116,4 +118,32 @@ def report(
         "overall": _rounded(evaluate(target_m, predicted_m)),
         "by_city": by_city,
         "by_city_season": by_city_season,
+    }
+
+
+def _improvement(
+    value: int | float | None, reference: int | float | None
+) -> tuple[float | None, bool | None]:
+    """`reference` に対して小さくなった割合と、それが基準以上か。比べられなければ None。"""
+    if value is None or reference is None or reference == 0:
+        return None, None
+    gain = reference - value
+    return float(gain / reference), bool(gain >= SUCCESS_MIN_IMPROVEMENT * reference)
+
+
+def success_criteria(model: Metrics, always_cap: Metrics, baseline: Metrics) -> dict[str, Any]:
+    """成功基準（docs/spec.md「9. 分割と評価」）の、ある都市についての判定。
+
+    1. 全体の MAE が「いつも上限」より 10% 以上小さい。
+    2. 上限より下の行だけの MAE が、ベースライン（概算式）より 10% 以上小さい。
+    """
+    overall, meets_overall = _improvement(model["mae_m"], always_cap["mae_m"])
+    below, meets_below = _improvement(model["mae_below_cap_m"], baseline["mae_below_cap_m"])
+    judged = meets_overall is not None and meets_below is not None
+    return {
+        "mae_improvement": overall,
+        "meets_mae": meets_overall,
+        "mae_below_cap_improvement": below,
+        "meets_mae_below_cap": meets_below,
+        "meets_both": (meets_overall and meets_below) if judged else None,
     }
