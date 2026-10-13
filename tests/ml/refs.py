@@ -117,3 +117,14 @@ def reported_ceiling_feet(report: str) -> int | None:
     """電文の BKN・OVC の層のうち、最も低い高さ（フィート）。なければ None。"""
     heights = [int(value) * 100 for value in _CEILING_LAYER.findall(metar_body(report))]
     return min(heights) if heights else None
+
+
+_CLOUD_GROUP = re.compile(r"(?<![A-Z/])(FEW|SCT|BKN|OVC|VV)(\d{3}|///)")
+
+
+def reported_cloud_groups(report: str) -> list[tuple[str, int | None]]:
+    """電文の雲の層（量, 高さ（フィート）。`///` は None）。いまの観測の部分だけ。"""
+    return [
+        (cover, None if height == "///" else int(height) * 100)
+        for cover, height in _CLOUD_GROUP.findall(metar_body(report))
+    ]
