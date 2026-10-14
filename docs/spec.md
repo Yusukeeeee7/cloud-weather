@@ -1,6 +1,6 @@
 # 仕様書（spec.md）
 
-最終更新：2026-10-14　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定。#8 でデータ取得の仕様を確定。#9 で目的変数と学習データの期間を確定。#11 で特徴量と学習の設定を確定し、テストの年の結果を記録。#12 で `/cloud-base` の仕様を確定。#17 でモデルを v2 に替え、テストの年の 2 回目の結果を記録。#14 で `cd.yml` のスモークテストとタグを確定）
+最終更新：2026-10-14　／　状態：初版（天気予報の拡張・日照計算を追加。#4 で時間・日ごとの予報の仕様を確定。#5 でキャッシュの仕様を確定。#6 でリトライと stale の仕様を確定。#7 で日照の仕様を確定。#8 でデータ取得の仕様を確定。#9 で目的変数と学習データの期間を確定。#11 で特徴量と学習の設定を確定し、テストの年の結果を記録。#12 で `/cloud-base` の仕様を確定。#17 でモデルを v2 に替え、テストの年の 2 回目の結果を記録。#14 で `cd.yml` のスモークテストとタグを確定。#15 で画面と `/cloud-history` を追加）
 
 ## 1. 目的
 
@@ -233,6 +233,44 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
   - 予測に使えない応答は保存しない。
 - 上の JSON の数値は形式を示す例で、実際の予測ではない。
 
+### `GET /cloud-history?city=tokyo`
+
+過去 24 時間の、その地点の雲量（全体・低・中・高層、%）を返す。画面（`GET /`）のスライダーに使う（#15、2026-10-14 決定）。
+
+```json
+{
+  "city": "tokyo",
+  "hourly": [
+    {"time": "2026-10-13T04:00:00Z", "cloud_cover": {"total": 70, "low": 50, "mid": 20, "high": 0}}
+  ]
+}
+```
+
+**#15 で決めたこと（2026-10-14）**
+
+- `hourly` は **24 件**、古い順。最後は **現在以前の最も近い正時**（`/cloud-base` の `valid_at` と同じ決め方）、先頭はその 23 時間前。
+- 値は Open-Meteo の過去の予報の保存値（公式ドキュメントの「archived forecasts」）で、**観測ではない**。画面にもそう書く。
+- 入力は、`/weather` と同じ 1 回の外部呼び出し（`past_hours=24&forecast_hours=168`。7 の表）の `hourly`。キャッシュは `/weather`・`/cloud-base` と同じ保存値（`weather:{city}`）・同じ決まり（TTL、stale の上限）。
+  - 外部APIが失敗したときは、上限（6 時間）までの保存値を、そのときの時刻で選び直して返す。応答に `cached`・`stale`・`fetched_at` は足さない（`/cloud-base` と同じ）。
+  - 保存値に 24 件の時刻が入っていない場合（`past_hours` を足す前に保存された値など）は、キャッシュなしとして外部APIを呼び直す。外部APIも失敗したら 502。
+- 24 件の範囲で、時刻の行がない・時刻が 1 時間おきでない・雲量が欠けている・null・整数でない場合、列の長さが時刻と違う場合は 502 `upstream_error`（一部だけ返さない）。範囲の外の null は見ない。
+- `city` の扱い（省略は `tokyo`、空文字・許可リスト外は 422 `invalid_city`）はほかのエンドポイントと同じ。
+- 上の JSON の数値は形式を示す例で、実在の値ではない。
+
+### `GET /`（画面）
+
+現在の天気・24 時間と 7 日間の予報・日照・雲底・過去 24 時間の雲量を表示する画面（#15、2026-10-14 決定）。
+
+- `app/static/` の `index.html`・`app.js`・`style.css`（ビルドの道具を使わない、素の HTML・JS・CSS）。`GET /` が `index.html` を返し、JS・CSS は `/static/...` で配る。配る場所はコードの定数で、利用者の入力からパスを作らない。
+- 表示はブラウザが同じオリジンの API（`/weather`・`/daylight`・`/cloud-base`・`/cloud-history`）を呼んで行う。サーバー側で HTML を組み立てない。API の値は `textContent` で入れる（`innerHTML` を使わない）。
+- 都市は `tokyo` / `berlin` の切り替え。時刻は表示のときだけ、`/weather` の `timezone` で現地時刻にする。
+- 雲底は `predicted_m` と `baseline_m` を並べる。`predicted_m` が 1524 のときは「1,524 m より下にシーリングなし」。`/cloud-base` が 503 のときは「モデルを読み込めていません」と出し、ほかの欄は表示を続ける。
+- どれかの API が失敗したら、その欄だけ「取得できませんでした」と出す。`/weather` が `stale: true` なら「古いデータです（取得：<時刻>）」と出す。
+- 過去 24 時間：スライダー（0〜23、最初は最新）で 1 時間ずつ選ぶ。選んだ時刻と 4 つの雲量を数字で出し、空を高・中・低層の 3 段に分けた図の雲の量・濃さを雲量に合わせて変える。下に全体の雲量の折れ線と、選んだ時刻の印を出す。再生ボタンは付けない。
+- 出典「Weather data by Open-Meteo.com」と Open-Meteo へのリンクを表示する（CC BY 4.0。7 の表）。
+- CDN・Web フォント・地図のタイルなど、外部のホストから読み込まない。
+- JS の動作（表示・スライダー）は自動テストせず、手元のブラウザで確かめる（2026-10-14 決定。テストの道具を足さないため）。
+
 ## 6. キャッシュ
 
 - キー：`weather:{city}`、TTL：15分（現在・時間ごと・日ごとを 1 回の外部呼び出しでまとめて取得し、まとめてキャッシュする）
@@ -274,7 +312,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 用途 | 提供元 | エンドポイント・項目（候補） | 利用条件・制限 | 状態 |
 |---|---|---|---|---|
 | 予報（現在） | Open-Meteo Forecast | `api.open-meteo.com/v1/forecast`、`current=` に temperature_2m, apparent_temperature, dew_point_2m, relative_humidity_2m, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m。応答の `current.time` は UTC（`timezone` 未指定時、オフセットなしの ISO 8601） | 無料の API は非商用のみ。上限 600 回/分・5,000 回/時・10,000 回/日・300,000 回/月。API キー不要。データは CC BY 4.0（表示する場所に出典のリンクが必要） | 確認済み（2026-10-12、#3） |
-| 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から）。#12 で足した 4 項目：dew_point_2m（℃）, relative_humidity_2m（%）, pressure_msl（hPa）, wind_speed_10m（`wind_speed_unit=ms` で m/s）。公式ドキュメントの表では precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」（過去データと同じ意味）。`current` は 15 分ごとのデータ（応答の `current.interval` が 900 秒、`current.time` も 15 分刻み）で、正時の値ではない | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合）。4 項目と値の意味は 2026-10-13、#12（同上） |
+| 予報（時間） | Open-Meteo Forecast | 同上、`hourly=` に temperature_2m, precipitation_probability, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high。応答は列ごとの配列（7 日分で 168 行、現地の今日 0 時から。#15 から `past_hours=24&forecast_hours=168` を足したので、192 行で、取得時の UTC の正時の 24 時間前から。下の「予報のオプション（過去の時間）」）。#12 で足した 4 項目：dew_point_2m（℃）, relative_humidity_2m（%）, pressure_msl（hPa）, wind_speed_10m（`wind_speed_unit=ms` で m/s）。公式ドキュメントの表では precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」（過去データと同じ意味）。`current` は 15 分ごとのデータ（応答の `current.interval` が 900 秒、`current.time` も 15 分刻み）で、正時の値ではない | 同上 | 確認済み（2026-10-12、#4。人間の指示で AI が公式ドキュメントと実レスポンスを照合）。4 項目と値の意味は 2026-10-13、#12（同上） |
 | 予報（日ごと） | Open-Meteo Forecast | 同上、`daily=` に weather_code, temperature_2m_max/min, precipitation_sum, precipitation_probability_max, sunrise, sunset。公式ドキュメントは「`daily` を指定するときは `timezone` が必須」としている（実際には指定しなくても 200 が返り、GMT の日付で区切られた。必ず指定する） | 同上 | 確認済み（2026-10-12、#4。同上） |
 | 予報のオプション（風速の単位） | Open-Meteo Forecast | `wind_speed_unit=ms`（既定は km/h） | 同上 | 確認済み（2026-10-12、#3） |
 | 予報のオプション（その他） | Open-Meteo Forecast | `timezone=<IANA の名前>`（既定は GMT。日ごとの値がそのタイムゾーンの日付で区切られる）、`timeformat=unixtime`（既定は iso8601。時刻が UTC の UNIX 秒になる。`daily.time` に `utc_offset_seconds` を足すと日付になる。`utc_offset_seconds` は取得時点の UTC との差で、応答全体に 1 つだけ。日ごとの区切りもこの固定の差で行われ、夏時間の切り替えをまたいでも 24 時間おき＝切り替え後の日は現地の 0 時から 1 時間ずれた区切りになる）、`forecast_days=7`（既定 7、範囲 0〜16。17 は 400、0 は空の配列） | 同上 | 確認済み（2026-10-12、#4。同上） |
@@ -558,7 +596,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 12 | 推論API | `/cloud-base` が仕様どおりに返る。モデルなしで 503 | 完了 |
 | 13 | Discord通知 | 毎朝通知が届く（天気・日照・雲底）。Webhook URL がログに出ない | 未着手 |
 | 14 | CD | main マージでスモークテスト後に ghcr.io へ push される | 実装済み（main へのマージ後の実行で確認） |
-| 15 | UI（任意） | 現在の天気・予報・日照・雲底を表示する簡単な画面 | 未着手 |
+| 15 | UI（任意） | 現在の天気・予報・日照・雲底を表示する簡単な画面。過去 24 時間の雲量をスライダーで見られる（`/cloud-history`。2026-10-14 に追加） | 実装済み（手元のブラウザでの確認待ち） |
 | 16 | 誤差の分析 | 検証の年（2024）で、上限より下の行の誤差を、高さの帯・符号（高すぎ／低すぎ）・都市・季節に分けて出す。分析の関数はテスト付きで `ml/` に置く。結果と、次に試す案（最大 3 つ）を `docs/model-card.md` に書く。モデルとテストの年には触れない | 完了（次に試す案は `docs/model-card.md` 10 節） |
 | 17 | モデルの改善 | #16 で決めた案を、計画で決めた手順で比べる。テストの年（2025）は最後に 1 回だけ評価し、成功基準の判定と前のモデルとの比較を `docs/model-card.md` に書く。採る場合は `model_version` を替え、`/cloud-base` のテストが通る | 完了。`two_stage_30` を採り、v2 に替えた。テストの年で 2 都市とも成功基準を満たした（`docs/model-card.md` 11 節） |
 
