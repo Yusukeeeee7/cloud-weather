@@ -105,6 +105,33 @@ class CloudBaseResponse(BaseModel):
     model_version: str
 
 
+class CloudBaseForecastHour(BaseModel):
+    # 予報の時刻（UTC の正時）。/weather の hourly と同じ。
+    time: datetime
+    predicted_m: int = Field(
+        description=(
+            "Predicted ceiling in metres, 0-1524, from the forecast values of that hour. "
+            "1524 means no ceiling below 1524 m."
+        )
+    )
+    baseline_m: int = Field(
+        description="Rule of thumb 125 x (temperature - dew point) in metres, limited to 0-1524."
+    )
+
+
+class CloudBaseForecastResponse(BaseModel):
+    city: str
+    model_version: str
+    # 先の時刻を予報値で予測したときの精度は測っていない（docs/model-card.md）。
+    hourly: list[CloudBaseForecastHour] = Field(
+        description=(
+            "Predictions for the same 24 hours as /weather hourly. The model was evaluated with "
+            "reanalysis inputs for the same hour; accuracy with forecast inputs for later hours "
+            "is not measured."
+        )
+    )
+
+
 class CloudHistoryHour(BaseModel):
     time: datetime
     cloud_cover: CloudCover

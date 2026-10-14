@@ -137,11 +137,36 @@ function cloudCell(cover) {
   return cell;
 }
 
-function renderHourly(weather) {
+function cloudBaseCell(hour) {
+  if (!hour) return el("td", "—", "num");
+  const text =
+    hour.predicted_m >= CAP_M
+      ? `${CAP_M.toLocaleString("ja-JP")} m 以上`
+      : `${hour.predicted_m.toLocaleString("ja-JP")} m`;
+  return el("td", text, "num");
+}
+
+// cloudBaseForecast は /cloud-base/forecast の Promise.allSettled の結果。
+function renderHourly(weather, cloudBaseForecast) {
   const table = document.getElementById("hourly");
   clear(table);
+  // 時刻で突き合わせる（/weather の hourly と同じ時刻のはず。ない時刻は「—」）。
+  const predictions = new Map();
+  if (cloudBaseForecast.status === "fulfilled") {
+    for (const hour of cloudBaseForecast.value.hourly) predictions.set(hour.time, hour);
+  }
+  const note = document.getElementById("hourly-note");
+  if (cloudBaseForecast.status === "fulfilled") {
+    note.textContent =
+      "雲底（予測）は、その時刻の予報値から機械学習モデルで推定した値です。先の時刻ほど予報の誤差が入ります。この使い方の精度は測っていません。";
+  } else if (cloudBaseForecast.reason.code === "model_unavailable") {
+    note.textContent = "雲底（予測）：モデルを読み込めていません";
+  } else {
+    note.textContent = "雲底（予測）：取得できませんでした";
+  }
   const head = el("tr");
-  for (const name of ["時刻", "天気", "気温", "降水確率", "降水量", "雲量（低 / 中 / 高）"]) head.append(el("th", name));
+  const names = ["時刻", "天気", "気温", "降水確率", "降水量", "雲量（低 / 中 / 高）", "雲底（予測）"];
+  for (const name of names) head.append(el("th", name));
   const thead = el("thead");
   thead.append(head);
   const tbody = el("tbody");
@@ -154,6 +179,7 @@ function renderHourly(weather) {
       el("td", `${hour.precipitation_probability} %`, "num"),
       el("td", `${hour.precipitation_mm.toFixed(1)} mm`, "num"),
       cloudCell(hour.cloud_cover),
+      cloudBaseCell(predictions.get(hour.time)),
     );
     tbody.append(row);
   }
@@ -391,11 +417,12 @@ async function load(city) {
   for (const button of document.querySelectorAll("[data-city]")) {
     button.setAttribute("aria-pressed", String(button.dataset.city === city));
   }
-  const [weather, daylight, cloudBase, cloudHistory] = await Promise.allSettled([
+  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast] = await Promise.allSettled([
     getJson("/weather", city),
     getJson("/daylight", city),
     getJson("/cloud-base", city),
     getJson("/cloud-history", city),
+    getJson("/cloud-base/forecast", city),
   ]);
   if (id !== loadId) return;
 
@@ -404,13 +431,14 @@ async function load(city) {
   if (weather.status === "fulfilled") {
     const value = weather.value;
     renderCurrent(value);
-    renderHourly(value);
+    renderHourly(value, cloudBaseForecast);
     renderDaily(value);
     showNotice(value.stale ? `古いデータです（取得：${formatTime(value.fetched_at, true)}）` : "");
   } else {
     for (const name of ["current", "hourly", "daily"]) {
       showError(document.getElementById(name), "取得できませんでした");
     }
+    document.getElementById("hourly-note").textContent = "";
     showNotice("天気を取得できなかったため、時刻は UTC で表示しています");
   }
 
