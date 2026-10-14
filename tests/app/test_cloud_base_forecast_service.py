@@ -11,7 +11,6 @@ from app.cities import CITIES, City
 from app.errors import UpstreamError
 from app.services import cloud_base_forecast
 from app.services.forecast import build_hourly
-from ml import model
 from ml.features import FEATURE_NAMES
 from tests.app.cloud_base_fakes import (
     CAP_M,
@@ -19,31 +18,13 @@ from tests.app.cloud_base_fakes import (
     expected_baseline_m,
     fake_model,
     row_of,
+    sequence_model,
     training_features,
 )
 from tests.conftest import PAST_NOW, RawForecast, load_past_forecast
 
 # PAST_NOW（2026-10-14T09:18Z）より後の最初の正時。
 FIRST = datetime(2026, 10, 14, 10, 0, tzinfo=UTC)
-
-
-class SequenceBooster:
-    """行ごとに決まった値を返す、モデルの代わり。"""
-
-    def __init__(self, values: list[float]) -> None:
-        self.values = values
-
-    def predict(self, data: pd.DataFrame, **_: Any) -> Any:
-        assert len(data) == len(self.values)
-        return pd.Series(self.values, dtype="float64").to_numpy()
-
-
-def _sequence_model(values: list[float]) -> model.CloudBaseModel:
-    return model.CloudBaseModel(
-        booster=SequenceBooster(values),  # type: ignore[arg-type]
-        train_years=(2018,),
-        model_version="fake-seq",
-    )
 
 
 def _times(raw: RawForecast, now: datetime) -> list[datetime]:
@@ -133,7 +114,7 @@ def test_forecast_rounds_and_limits_values() -> None:
     values = given + [850.0] * (24 - len(given))
 
     response = cloud_base_forecast.build_cloud_base_forecast_response(
-        City.TOKYO, load_past_forecast("tokyo"), PAST_NOW, _sequence_model(values)
+        City.TOKYO, load_past_forecast("tokyo"), PAST_NOW, sequence_model(values)
     )
 
     predicted = [hour.predicted_m for hour in response.hourly]

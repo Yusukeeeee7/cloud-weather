@@ -12,7 +12,7 @@ from app.cities import City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudCover, CloudHistoryHour, CloudHistoryResponse
-from app.services.forecast import INVALID_RESPONSE_ERRORS, MAX_HOURLY_ROWS, from_unix, latest_hour
+from app.services.forecast import INVALID_RESPONSE_ERRORS, from_unix, hourly_columns, latest_hour
 from app.services.weather import Clock, Source, get_forecast
 
 logger = logging.getLogger(__name__)
@@ -34,23 +34,6 @@ class _RawHistory(BaseModel):
     cloud_cover_high: list[int]
 
 
-def _columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
-    section = raw.get("hourly")
-    if not isinstance(section, Mapping):
-        raise ValueError("hourly is not an object")
-    columns: dict[str, list[Any]] = {}
-    for name in _RawHistory.model_fields:
-        column = section.get(name)
-        if not isinstance(column, list):
-            raise ValueError("hourly column is missing or not an array")
-        columns[name] = column
-    rows = len(columns["time"])
-    # 長さが違う列は、どの行がどの時刻か分からない。
-    if rows > MAX_HOURLY_ROWS or any(len(column) != rows for column in columns.values()):
-        raise ValueError("unexpected hourly column length")
-    return columns
-
-
 def history_times(now: datetime) -> list[datetime]:
     """過去 24 時間の時刻（UTC、古い順）。最後は `now` 以前の最も近い正時。"""
     latest = latest_hour(now)
@@ -58,7 +41,7 @@ def history_times(now: datetime) -> list[datetime]:
 
 
 def _parse_window(raw: Mapping[str, Any], now: datetime) -> _RawHistory:
-    columns = _columns(raw)
+    columns = hourly_columns(raw, _RawHistory.model_fields)
     times = columns["time"]
     first = history_times(now)[0]
     # その時刻の行がなければ ValueError（過去の時間のない保存値など）。

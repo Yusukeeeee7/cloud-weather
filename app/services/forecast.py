@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -76,12 +76,17 @@ def forecast_times(now: datetime) -> list[datetime]:
     return [first + timedelta(hours=n) for n in range(HOURLY_COUNT)]
 
 
-def _hourly_columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
+def hourly_columns(raw: Mapping[str, Any], names: Iterable[str]) -> dict[str, list[Any]]:
+    """hourly（列ごとの配列）から、その名前の列を取り出す。`names` には `time` を含める。
+
+    列がない・配列でない・長さが時刻と違う・行が多すぎる場合は ValueError
+    （長さが違う列は、どの行がどの時刻か分からない）。値の検証は呼ぶ側で、使う行だけに行う。
+    """
     section = raw.get("hourly")
     if not isinstance(section, Mapping):
         raise ValueError("hourly is not an object")
     columns: dict[str, list[Any]] = {}
-    for name in _RawHourly.model_fields:
+    for name in names:
         column = section.get(name)
         if not isinstance(column, list):
             raise ValueError("hourly column is missing or not an array")
@@ -90,6 +95,10 @@ def _hourly_columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
     if rows > MAX_HOURLY_ROWS or any(len(column) != rows for column in columns.values()):
         raise ValueError("unexpected hourly column length")
     return columns
+
+
+def _hourly_columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
+    return hourly_columns(raw, _RawHourly.model_fields)
 
 
 def _window_start(times: list[Any], now: datetime) -> int:

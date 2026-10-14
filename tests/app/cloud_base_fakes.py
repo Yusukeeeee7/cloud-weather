@@ -82,3 +82,30 @@ def training_features(city: City, raw: RawForecast, at: datetime) -> pd.DataFram
     rows = table.index[table["time"] == at]
     assert len(rows) == 1
     return features(table).loc[rows].reset_index(drop=True)
+
+
+class SequenceBooster:
+    """行ごとに決まった値を返す、モデルの代わり。"""
+
+    def __init__(self, values: list[float]) -> None:
+        self.values = values
+
+    def predict(self, data: pd.DataFrame, **_: Any) -> Any:
+        assert len(data) == len(self.values)
+        return pd.Series(self.values, dtype="float64").to_numpy()
+
+
+def sequence_model(values: list[float]) -> model.CloudBaseModel:
+    return model.CloudBaseModel(
+        booster=SequenceBooster(values),  # type: ignore[arg-type]
+        train_years=(2018,),
+        model_version="fake-seq",
+    )
+
+
+def use_model(replacement: model.CloudBaseModel | None) -> None:
+    """起動のときに読み込んだモデルの代わりに、これを使う（None はモデルなし）。"""
+    from app.main import app
+    from app.routers.cloud_base import get_cloud_base_model
+
+    app.dependency_overrides[get_cloud_base_model] = lambda: replacement

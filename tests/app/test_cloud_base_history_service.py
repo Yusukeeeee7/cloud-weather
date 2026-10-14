@@ -16,27 +16,17 @@ from ml.features import FEATURE_NAMES
 from tests.app.cloud_base_fakes import (
     CAP_M,
     ITEMS,
+    SequenceBooster,
     expected_baseline_m,
     fake_model,
     row_of,
     training_features,
 )
-from tests.conftest import PAST_NOW, RawForecast, load_past_forecast
+from tests.conftest import PAST_NOW, RawForecast, load_past_forecast, without_past_hours
 
 # PAST_NOW（2026-10-14T09:18Z）以前の最も近い正時と、その 23 時間前。
 LATEST = datetime(2026, 10, 14, 9, 0, tzinfo=UTC)
 FIRST = LATEST - timedelta(hours=23)
-
-
-class SequenceBooster:
-    """行ごとに決まった値を返す、モデルの代わり。"""
-
-    def __init__(self, values: list[float]) -> None:
-        self.values = values
-
-    def predict(self, data: pd.DataFrame, **_: Any) -> Any:
-        assert len(data) == len(self.values)
-        return pd.Series(self.values, dtype="float64").to_numpy()
 
 
 def _build(raw: RawForecast, now: datetime, fake: model.CloudBaseModel | None = None) -> Any:
@@ -48,13 +38,6 @@ def _build(raw: RawForecast, now: datetime, fake: model.CloudBaseModel | None = 
 def _with_value(raw: RawForecast, item: str, at: datetime, value: Any) -> RawForecast:
     changed = copy.deepcopy(raw)
     changed["hourly"][item][row_of(raw, at)] = value
-    return changed
-
-
-def _without_past_hours(raw: RawForecast) -> RawForecast:
-    """過去の時間を足す前の形（hourly が取得時の正時から始まる）。fixture の先頭 24 行を除く。"""
-    changed = copy.deepcopy(raw)
-    changed["hourly"] = {name: column[24:] for name, column in raw["hourly"].items()}
     return changed
 
 
@@ -203,7 +186,7 @@ def test_history_missing_item_is_upstream_error(item: str) -> None:
 
 def test_history_missing_row_is_upstream_error() -> None:
     with pytest.raises(UpstreamError):
-        _build(_without_past_hours(load_past_forecast("tokyo")), PAST_NOW)
+        _build(without_past_hours(load_past_forecast("tokyo")), PAST_NOW)
 
 
 def test_history_can_start_at_first_row() -> None:

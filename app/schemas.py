@@ -149,7 +149,11 @@ class SunshineHour(BaseModel):
     # 予報の時刻（UTC の正時）。/weather の hourly と同じ。値はどれも、この時刻までの 1 時間。
     time: datetime
     sunshine_s: float = Field(
-        description="Seconds of sunshine in the preceding hour (0-3600), from Open-Meteo."
+        description=(
+            "Open-Meteo hourly sunshine_duration in seconds (0-3600). Its hourly meaning is not "
+            "documented; it is treated as the preceding hour, from the daily definition and real "
+            "responses."
+        )
     )
     direct_radiation_wm2: float = Field(
         description="Direct solar radiation on the horizontal plane, preceding hour mean (W/m2)."

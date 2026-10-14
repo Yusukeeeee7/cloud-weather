@@ -571,16 +571,22 @@ async function load(city) {
   for (const button of document.querySelectorAll("[data-city]")) {
     button.setAttribute("aria-pressed", String(button.dataset.city === city));
   }
-  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory, sunshine] =
-    await Promise.allSettled([
+  // /weather を先に待つ。残りは同じ保存値（weather:{city}）を使うので、
+  // 同時に呼ぶと、キャッシュが空のときに外部APIをそれぞれが呼んでしまう。
+  // /daylight は外部APIを使わないので、/weather と同時に呼ぶ。
+  const [weather, daylight] = await Promise.allSettled([
     getJson("/weather", city),
     getJson("/daylight", city),
-    getJson("/cloud-base", city),
-    getJson("/cloud-history", city),
-    getJson("/cloud-base/forecast", city),
-    getJson("/cloud-base/history", city),
-    getJson("/sunshine", city),
   ]);
+  if (id !== loadId) return;
+  const [cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory, sunshine] =
+    await Promise.allSettled([
+      getJson("/cloud-base", city),
+      getJson("/cloud-history", city),
+      getJson("/cloud-base/forecast", city),
+      getJson("/cloud-base/history", city),
+      getJson("/sunshine", city),
+    ]);
   if (id !== loadId) return;
 
   // /weather が取れなければ、時刻は UTC で出す。

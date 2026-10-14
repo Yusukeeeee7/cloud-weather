@@ -1,9 +1,11 @@
+import copy
 import json
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -103,3 +105,32 @@ def client(open_meteo: respx.MockRouter) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+# --- 外部APIのモックと応答の確認（#15 のテストで共有する） ---
+
+
+def iso(at: datetime) -> str:
+    """応答の時刻の書き方（UTC、末尾 Z、秒まで）。"""
+    return at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def mock_ok(open_meteo: respx.MockRouter, raw: RawForecast) -> respx.Route:
+    return open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(200, json=raw))
+
+
+def assert_error(response: httpx.Response, status: int, code: str) -> None:
+    """spec.md「5. 共通」のエラー形式で、その HTTP と code であること。"""
+    assert response.status_code == status
+    body = response.json()
+    assert set(body) == {"error"}
+    assert set(body["error"]) == {"code", "message"}
+    assert body["error"]["code"] == code
+    assert isinstance(body["error"]["message"], str) and body["error"]["message"]
+
+
+def without_past_hours(raw: RawForecast) -> RawForecast:
+    """過去の時間を足す前の形（hourly が取得時の正時から始まる）。fixture の先頭 24 行を除く。"""
+    changed = copy.deepcopy(raw)
+    changed["hourly"] = {name: column[24:] for name, column in raw["hourly"].items()}
+    return changed

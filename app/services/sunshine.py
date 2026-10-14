@@ -14,9 +14,9 @@ from app.errors import UpstreamError
 from app.schemas import SunshineHour, SunshineResponse
 from app.services.forecast import (
     INVALID_RESPONSE_ERRORS,
-    MAX_HOURLY_ROWS,
     forecast_times,
     from_unix,
+    hourly_columns,
 )
 from app.services.weather import Clock, Source, get_forecast
 
@@ -35,25 +35,8 @@ class _RawSunshine(BaseModel):
     diffuse_radiation: list[float]
 
 
-def _columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
-    section = raw.get("hourly")
-    if not isinstance(section, Mapping):
-        raise ValueError("hourly is not an object")
-    columns: dict[str, list[Any]] = {}
-    for name in _RawSunshine.model_fields:
-        column = section.get(name)
-        if not isinstance(column, list):
-            raise ValueError("hourly column is missing or not an array")
-        columns[name] = column
-    rows = len(columns["time"])
-    # 長さが違う列は、どの行がどの時刻か分からない。
-    if rows > MAX_HOURLY_ROWS or any(len(column) != rows for column in columns.values()):
-        raise ValueError("unexpected hourly column length")
-    return columns
-
-
 def _parse_window(raw: Mapping[str, Any], times: list[datetime]) -> _RawSunshine:
-    columns = _columns(raw)
+    columns = hourly_columns(raw, _RawSunshine.model_fields)
     # その時刻の行を順に探す。なければ ValueError（3 項目のない保存値・行が足りないなど）。
     # 整数でない時刻は、見つからないか、下の strict の検証で落ちる。
     rows = [columns["time"].index(int(at.timestamp())) for at in times]

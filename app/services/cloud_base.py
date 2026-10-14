@@ -15,7 +15,7 @@ from app.cities import City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudBaseResponse
-from app.services.forecast import INVALID_RESPONSE_ERRORS, MAX_HOURLY_ROWS, latest_hour
+from app.services.forecast import INVALID_RESPONSE_ERRORS, hourly_columns, latest_hour
 from app.services.weather import Clock, Source, get_forecast
 from ml import model as ml_model
 from ml.archive import VARIABLES
@@ -79,21 +79,10 @@ def _check_units(raw: Mapping[str, Any]) -> None:
 def _select_rows(raw: Mapping[str, Any], ats: list[datetime]) -> list[_RawRow]:
     """hourly から、その時刻の行を順に選んで検証する。1 つでも使えなければ ValueError。"""
     _check_units(raw)
-    section = raw.get("hourly")
-    if not isinstance(section, Mapping):
-        raise ValueError("hourly is not an object")
-    times = section.get("time")
-    if not isinstance(times, list) or len(times) > MAX_HOURLY_ROWS:
-        raise ValueError("hourly time is missing or too long")
+    columns = hourly_columns(raw, ["time", *_RawRow.model_fields])
+    times = columns.pop("time")
     if not all(type(value) is int for value in times):
         raise ValueError("hourly time is not unix seconds")
-    columns: dict[str, list[Any]] = {}
-    for name in _RawRow.model_fields:
-        column = section.get(name)
-        # 長さが違う列は、どの行がどの時刻か分からない。
-        if not isinstance(column, list) or len(column) != len(times):
-            raise ValueError("hourly column is missing or has an unexpected length")
-        columns[name] = column
     selected: list[_RawRow] = []
     for at in ats:
         # hourly は取得時の正時の 24 時間前から入っている

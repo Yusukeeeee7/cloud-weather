@@ -13,6 +13,7 @@ from app.cities import CITIES, City
 from app.errors import UpstreamError
 from app.services import sunshine
 from app.services.forecast import MAX_HOURLY_ROWS, build_hourly
+from tests.app.cloud_base_fakes import row_of
 from tests.conftest import SUN_NOW, RawForecast, load_sun_forecast
 
 ITEMS = ("sunshine_duration", "direct_radiation", "diffuse_radiation")
@@ -20,14 +21,9 @@ ITEMS = ("sunshine_duration", "direct_radiation", "diffuse_radiation")
 FIRST = datetime(2026, 10, 14, 13, 0, tzinfo=UTC)
 
 
-def _row_of(raw: RawForecast, at: datetime) -> int:
-    times: list[int] = raw["hourly"]["time"]
-    return times.index(int(at.timestamp()))
-
-
 def _with_value(raw: RawForecast, item: str, at: datetime, value: Any) -> RawForecast:
     changed = copy.deepcopy(raw)
-    changed["hourly"][item][_row_of(raw, at)] = value
+    changed["hourly"][item][row_of(raw, at)] = value
     return changed
 
 
@@ -75,7 +71,7 @@ def test_sunshine_values_come_from_fixture(city: City) -> None:
     response = sunshine.build_sunshine_response(city, raw, SUN_NOW)
 
     for hour in response.hourly:
-        row = _row_of(raw, hour.time)
+        row = row_of(raw, hour.time)
         assert hour.sunshine_s == raw["hourly"]["sunshine_duration"][row]
         assert hour.direct_radiation_wm2 == raw["hourly"]["direct_radiation"][row]
         assert hour.diffuse_radiation_wm2 == raw["hourly"]["diffuse_radiation"][row]

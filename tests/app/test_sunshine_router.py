@@ -8,13 +8,16 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from tests.app.cloud_base_fakes import row_of
 from tests.conftest import (
     FORECAST_URL,
     SUN_NOW,
     FakeClock,
-    RawForecast,
+    assert_error,
+    iso,
     load_past_forecast,
     load_sun_forecast,
+    mock_ok,
 )
 
 RESPONSE_KEYS = {"city", "hourly"}
@@ -23,27 +26,6 @@ ITEMS = ("sunshine_duration", "direct_radiation", "diffuse_radiation")
 # SUN_NOW（2026-10-14T12:21Z）より後の最初の正時。
 FIRST = datetime(2026, 10, 14, 13, 0, tzinfo=UTC)
 SIX_HOURS = timedelta(hours=6)
-
-
-def _iso(at: datetime) -> str:
-    return at.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _mock_ok(open_meteo: respx.MockRouter, raw: RawForecast) -> respx.Route:
-    return open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(200, json=raw))
-
-
-def _assert_error(response: httpx.Response, status: int, code: str) -> None:
-    assert response.status_code == status
-    body = response.json()
-    assert set(body) == {"error"}
-    assert body["error"]["code"] == code
-    assert isinstance(body["error"]["message"], str) and body["error"]["message"]
-
-
-def _row_of(raw: RawForecast, at: datetime) -> int:
-    times: list[int] = raw["hourly"]["time"]
-    return times.index(int(at.timestamp()))
 
 
 @pytest.fixture
@@ -64,7 +46,7 @@ def test_sunshine_returns_spec_keys(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock, city: str
 ) -> None:
     raw = load_sun_forecast(city)
-    route = _mock_ok(open_meteo, raw)
+    route = mock_ok(open_meteo, raw)
 
     response = client.get("/sunshine", params={"city": city})
 
@@ -73,10 +55,10 @@ def test_sunshine_returns_spec_keys(
     assert set(body) == RESPONSE_KEYS
     assert body["city"] == city
     assert len(body["hourly"]) == 24
-    assert body["hourly"][0]["time"] == _iso(FIRST)
-    row = _row_of(raw, FIRST)
+    assert body["hourly"][0]["time"] == iso(FIRST)
+    row = row_of(raw, FIRST)
     assert body["hourly"][0] == {
-        "time": _iso(FIRST),
+        "time": iso(FIRST),
         "sunshine_s": raw["hourly"]["sunshine_duration"][row],
         "direct_radiation_wm2": raw["hourly"]["direct_radiation"][row],
         "diffuse_radiation_wm2": raw["hourly"]["diffuse_radiation"][row],
@@ -89,7 +71,7 @@ def test_sunshine_returns_spec_keys(
 def test_sunshine_times_match_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    _mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    mock_ok(open_meteo, load_sun_forecast("tokyo"))
 
     weather = client.get("/weather", params={"city": "tokyo"})
     sun = client.get("/sunshine", params={"city": "tokyo"})
@@ -104,7 +86,7 @@ def test_sunshine_times_match_weather(
 def test_sunshine_city_default_is_tokyo(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = _mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    route = mock_ok(open_meteo, load_sun_forecast("tokyo"))
 
     response = client.get("/sunshine")
 
@@ -116,11 +98,11 @@ def test_sunshine_city_default_is_tokyo(
 def test_sunshine_invalid_city(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock, city: str
 ) -> None:
-    route = _mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    route = mock_ok(open_meteo, load_sun_forecast("tokyo"))
 
     response = client.get("/sunshine", params={"city": city})
 
-    _assert_error(response, 422, "invalid_city")
+    assert_error(response, 422, "invalid_city")
     assert route.call_count == 0
 
 
@@ -132,7 +114,7 @@ def test_sunshine_upstream_failure_without_cache_is_502(
 
     response = client.get("/sunshine", params={"city": "tokyo"})
 
-    _assert_error(response, 502, "upstream_error")
+    assert_error(response, 502, "upstream_error")
 
 
 # --- S7〜S9：キャッシュ ---
@@ -141,7 +123,7 @@ def test_sunshine_upstream_failure_without_cache_is_502(
 def test_sunshine_shares_cache_with_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = _mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    route = mock_ok(open_meteo, load_sun_forecast("tokyo"))
 
     weather = client.get("/weather", params={"city": "tokyo"})
     clock.now = SUN_NOW + timedelta(minutes=14, seconds=59)
@@ -159,7 +141,7 @@ def test_sunshine_refetches_when_cached_entry_lacks_items(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
     # 3 項目を足す前の形（過去 24 時間を含む fixture）が保存されている場合。
-    route = _mock_ok(open_meteo, load_past_forecast("tokyo"))
+    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
     weather = client.get("/weather", params={"city": "tokyo"})
     assert (weather.status_code, route.call_count) == (200, 1)
 
@@ -170,7 +152,7 @@ def test_sunshine_refetches_when_cached_entry_lacks_items(
     again = client.get("/sunshine", params={"city": "tokyo"})
 
     assert sun.status_code == 200
-    row = _row_of(raw, FIRST)
+    row = row_of(raw, FIRST)
     assert sun.json()["hourly"][0]["sunshine_s"] == raw["hourly"]["sunshine_duration"][row]
     assert again.json() == sun.json()
     assert route.call_count == 2
@@ -179,21 +161,21 @@ def test_sunshine_refetches_when_cached_entry_lacks_items(
 def test_sunshine_old_entry_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = _mock_ok(open_meteo, load_past_forecast("tokyo"))
+    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
     client.get("/weather", params={"city": "tokyo"})
 
     route.mock(return_value=httpx.Response(500))
     clock.now = SUN_NOW + timedelta(minutes=5)
     response = client.get("/sunshine", params={"city": "tokyo"})
 
-    _assert_error(response, 502, "upstream_error")
+    assert_error(response, 502, "upstream_error")
 
 
 def test_sunshine_uses_stale_cache(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
     raw = load_sun_forecast("tokyo")
-    route = _mock_ok(open_meteo, raw)
+    route = mock_ok(open_meteo, raw)
     client.get("/sunshine", params={"city": "tokyo"})
     route.mock(return_value=httpx.Response(500))
 
@@ -207,14 +189,14 @@ def test_sunshine_uses_stale_cache(
     assert stale.status_code == 200
     assert set(stale.json()) == RESPONSE_KEYS
     later = FIRST + timedelta(hours=2)
-    assert stale.json()["hourly"][0]["time"] == _iso(later)
+    assert stale.json()["hourly"][0]["time"] == iso(later)
     assert (
         stale.json()["hourly"][0]["sunshine_s"]
-        == raw["hourly"]["sunshine_duration"][_row_of(raw, later)]
+        == raw["hourly"]["sunshine_duration"][row_of(raw, later)]
     )
     assert at_limit.status_code == 200
-    assert at_limit.json()["hourly"][0]["time"] == _iso(FIRST + SIX_HOURS)
-    _assert_error(too_old, 502, "upstream_error")
+    assert at_limit.json()["hourly"][0]["time"] == iso(FIRST + SIX_HOURS)
+    assert_error(too_old, 502, "upstream_error")
 
 
 # --- S10：/weather は変わらない（Red にならない） ---
@@ -229,7 +211,7 @@ def test_weather_unchanged_with_sunshine_items(
     for item in ITEMS:
         del without["hourly"][item]
         del without["hourly_units"][item]
-    route = _mock_ok(open_meteo, raw)
+    route = mock_ok(open_meteo, raw)
     with_items = client.get("/weather", params={"city": city})
 
     # キャッシュを使わないように、TTL を過ぎてから 3 項目のない応答で取り直す。

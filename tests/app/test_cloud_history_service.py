@@ -11,16 +11,12 @@ from app.cities import CITIES, City
 from app.errors import UpstreamError
 from app.services.cloud_history import HISTORY_COUNT, build_cloud_history_response
 from app.services.forecast import MAX_HOURLY_ROWS
+from tests.app.cloud_base_fakes import row_of
 from tests.conftest import PAST_NOW, RawForecast, load_past_forecast
 
 CLOUD_ITEMS = ("cloud_cover", "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high")
 # PAST_NOW（2026-10-14T09:18Z）以前の最も近い正時。
 LATEST = datetime(2026, 10, 14, 9, 0, tzinfo=UTC)
-
-
-def _row_of(raw: RawForecast, at: datetime) -> int:
-    times: list[int] = raw["hourly"]["time"]
-    return times.index(int(at.timestamp()))
 
 
 def _first_time(raw: RawForecast) -> datetime:
@@ -52,7 +48,7 @@ def test_history_returns_24_hours_ending_at_latest_past_hour(city: City) -> None
     expected_times = [LATEST - timedelta(hours=23 - n) for n in range(24)]
     assert _times(response.hourly) == expected_times
     for hour in response.hourly:
-        row = _row_of(raw, hour.time)
+        row = row_of(raw, hour.time)
         assert hour.cloud_cover.total == raw["hourly"]["cloud_cover"][row]
         assert hour.cloud_cover.low == raw["hourly"]["cloud_cover_low"][row]
         assert hour.cloud_cover.mid == raw["hourly"]["cloud_cover_mid"][row]
@@ -136,7 +132,7 @@ def test_history_after_last_row_is_upstream_error() -> None:
 @pytest.mark.parametrize("at", [LATEST, LATEST - timedelta(hours=23)], ids=["last", "first"])
 def test_history_invalid_cloud_cover_is_upstream_error(item: str, bad: Any, at: datetime) -> None:
     raw = load_past_forecast("tokyo")
-    changed = _with_value(raw, item, _row_of(raw, at), bad)
+    changed = _with_value(raw, item, row_of(raw, at), bad)
 
     with pytest.raises(UpstreamError):
         build_cloud_history_response(City.TOKYO, changed, PAST_NOW)
@@ -145,8 +141,8 @@ def test_history_invalid_cloud_cover_is_upstream_error(item: str, bad: Any, at: 
 @pytest.mark.parametrize("item", CLOUD_ITEMS)
 def test_history_ignores_null_outside_window(item: str) -> None:
     raw = load_past_forecast("tokyo")
-    before = _row_of(raw, LATEST - timedelta(hours=24))
-    after = _row_of(raw, LATEST + timedelta(hours=1))
+    before = row_of(raw, LATEST - timedelta(hours=24))
+    after = row_of(raw, LATEST + timedelta(hours=1))
     changed = _with_value(_with_value(raw, item, before, None), item, after, None)
 
     response = build_cloud_history_response(City.TOKYO, changed, PAST_NOW)
@@ -209,7 +205,7 @@ def test_history_non_integer_time_is_upstream_error(kind: type) -> None:
 
 def test_history_non_consecutive_times_is_upstream_error() -> None:
     raw = load_past_forecast("tokyo")
-    middle = _row_of(raw, LATEST - timedelta(hours=12))
+    middle = row_of(raw, LATEST - timedelta(hours=12))
     shifted = raw["hourly"]["time"][middle] + 1800
     changed = _with_value(raw, "time", middle, shifted)
 
