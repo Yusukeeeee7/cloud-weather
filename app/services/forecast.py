@@ -69,6 +69,13 @@ def latest_hour(now: datetime) -> datetime:
     return now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
 
 
+def forecast_times(now: datetime) -> list[datetime]:
+    """`/weather` の hourly と同じ時刻：現在より後の最初の正時から（正時ちょうどならその時刻）。"""
+    latest = latest_hour(now)
+    first = latest if latest == now else latest + timedelta(hours=1)
+    return [first + timedelta(hours=n) for n in range(HOURLY_COUNT)]
+
+
 def _hourly_columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
     section = raw.get("hourly")
     if not isinstance(section, Mapping):

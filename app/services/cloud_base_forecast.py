@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from app.cache import Cache
@@ -11,7 +11,7 @@ from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudBaseForecastHour, CloudBaseForecastResponse
 from app.services.cloud_base import input_rows, predict_rows
-from app.services.forecast import HOURLY_COUNT, INVALID_RESPONSE_ERRORS, latest_hour
+from app.services.forecast import HOURLY_COUNT, INVALID_RESPONSE_ERRORS, forecast_times
 from app.services.weather import Clock, Source, get_forecast
 from ml.model import CloudBaseModel
 
@@ -19,13 +19,6 @@ logger = logging.getLogger(__name__)
 
 # /weather の hourly と同じ件数。
 FORECAST_HOURS = HOURLY_COUNT
-
-
-def forecast_times(now: datetime) -> list[datetime]:
-    """`/weather` の hourly と同じ時刻：現在より後の最初の正時から（正時ちょうどならその時刻）。"""
-    latest = latest_hour(now)
-    first = latest if latest == now else latest + timedelta(hours=1)
-    return [first + timedelta(hours=n) for n in range(FORECAST_HOURS)]
 
 
 def build_cloud_base_forecast_response(

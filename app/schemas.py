@@ -145,6 +145,30 @@ class CloudBaseHistoryResponse(BaseModel):
     )
 
 
+class SunshineHour(BaseModel):
+    # 予報の時刻（UTC の正時）。/weather の hourly と同じ。値はどれも、この時刻までの 1 時間。
+    time: datetime
+    sunshine_s: float = Field(
+        description="Seconds of sunshine in the preceding hour (0-3600), from Open-Meteo."
+    )
+    direct_radiation_wm2: float = Field(
+        description="Direct solar radiation on the horizontal plane, preceding hour mean (W/m2)."
+    )
+    diffuse_radiation_wm2: float = Field(
+        description="Diffuse solar radiation, preceding hour mean (W/m2)."
+    )
+
+
+class SunshineResponse(BaseModel):
+    city: str
+    hourly: list[SunshineHour] = Field(
+        description=(
+            "Sunshine for the same 24 hours as /weather hourly. Each value covers the "
+            "preceding hour."
+        )
+    )
+
+
 class CloudHistoryHour(BaseModel):
     time: datetime
     cloud_cover: CloudCover

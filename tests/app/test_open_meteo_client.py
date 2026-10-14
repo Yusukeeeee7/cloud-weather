@@ -19,7 +19,8 @@ EXPECTED_CURRENT = (
 EXPECTED_HOURLY = (
     "temperature_2m,precipitation_probability,precipitation,weather_code,"
     "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
-    "dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m"
+    "dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,"
+    "sunshine_duration,direct_radiation,diffuse_radiation"
 )
 EXPECTED_DAILY = (
     "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,"
@@ -85,6 +86,21 @@ def test_client_requests_hourly_and_daily_params(
     assert params["daily"] == EXPECTED_DAILY
     assert params["timeformat"] == "unixtime"
     assert params["forecast_days"] == "7"
+
+
+def test_client_requests_sunshine_items(
+    open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(
+        return_value=httpx.Response(200, json=forecast("tokyo"))
+    )
+
+    asyncio.run(_fetch(City.TOKYO))
+
+    # /sunshine の 3 項目も同じ 1 回の呼び出しで取る（spec.md 7 の表で確認済みの名前）。
+    items = route.calls.last.request.url.params["hourly"].split(",")
+    assert items[-3:] == ["sunshine_duration", "direct_radiation", "diffuse_radiation"]
+    assert route.call_count == 1
 
 
 def test_client_requests_past_hours(

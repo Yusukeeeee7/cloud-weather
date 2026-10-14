@@ -22,6 +22,9 @@ CLOUD_BASE_NOW = datetime(2026, 10, 13, 14, 16, 30, 123456, tzinfo=UTC)
 # 過去 24 時間を含む fixture（#15）を取得した時刻（2 都市とも 2026-10-14T09:18:03Z）の直後。
 PAST_NOW = datetime(2026, 10, 14, 9, 18, 5, 123456, tzinfo=UTC)
 
+# 日差しの 3 項目を含む fixture（#15）を取得した時刻（2026-10-14T12:20:49Z〜12:21:02Z）の直後。
+SUN_NOW = datetime(2026, 10, 14, 12, 21, 5, 123456, tzinfo=UTC)
+
 RawForecast = dict[str, Any]
 
 
@@ -55,6 +58,10 @@ def load_cloud_base_forecast(city: str) -> RawForecast:
 
 def load_past_forecast(city: str) -> RawForecast:
     return _load(f"forecast_{city}_past.json")
+
+
+def load_sun_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_sun.json")
 
 
 @pytest.fixture

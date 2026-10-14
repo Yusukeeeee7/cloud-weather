@@ -38,6 +38,10 @@ HOURLY_VARIABLES = (
     "relative_humidity_2m",
     "pressure_msl",
     "wind_speed_10m",
+    # /sunshine に使う（/weather の応答には出さない）。どれも前の 1 時間の値。
+    "sunshine_duration",
+    "direct_radiation",
+    "diffuse_radiation",
 )
 DAILY_VARIABLES = (
     "weather_code",

@@ -250,11 +250,13 @@ td.num {
   fill: var(--muted);
 }
 
-td.cloud span {
+td.cloud span,
+td.sun span {
   display: block;
 }
 
-.cloud-layers {
+.cloud-layers,
+.sun-radiation {
   color: var(--muted);
   font-size: 0.75rem;
 }

@@ -113,7 +113,16 @@ function showNotice(text) {
 
 // --- 各欄 ---
 
-function renderCurrent(weather) {
+// 「現在」の日差し：/sunshine の先頭の行（いまの時刻を含む 1 時間。その時刻まで）。
+function sunshineTile(sunshine) {
+  if (sunshine.status !== "fulfilled" || sunshine.value.hourly.length === 0) {
+    return tile("日差し", "", "取得できませんでした");
+  }
+  const hour = sunshine.value.hourly[0];
+  return tile("日差し", sunshineMinutes(hour), `〜${formatTime(hour.time)} の 1 時間`);
+}
+
+function renderCurrent(weather, sunshine) {
   const box = document.getElementById("current");
   clear(box);
   const now = weather.current;
@@ -124,6 +133,7 @@ function renderCurrent(weather) {
     tile("湿度", `${now.relative_humidity} %`, `露点 ${now.dew_point_c.toFixed(1)} ℃`),
     tile("風速", `${now.wind_speed_ms.toFixed(1)} m/s`),
     tile("雲量", `${cover.total} %`, `低 ${cover.low} / 中 ${cover.mid} / 高 ${cover.high}`),
+    sunshineTile(sunshine),
   );
 }
 
@@ -150,15 +160,47 @@ function cloudBaseCell(hour) {
   return el("td", hour ? formatCeiling(hour.predicted_m) : "", "num");
 }
 
-// cloudBaseForecast は /cloud-base/forecast の Promise.allSettled の結果。
-function renderHourly(weather, cloudBaseForecast) {
+// Promise.allSettled の結果の hourly を、時刻 → 1 時刻ぶんの値にする（失敗なら空）。
+function byTime(result) {
+  return result.status === "fulfilled"
+    ? new Map(result.value.hourly.map((hour) => [hour.time, hour]))
+    : new Map();
+}
+
+function sunshineMinutes(hour) {
+  return `${Math.round(hour.sunshine_s / 60)} 分`;
+}
+
+function sunshineCell(hour) {
+  // 日照時間（分）と、その下に直達・散乱日射（W/m²）。ない時刻は空欄。
+  const cell = el("td", null, "num sun");
+  if (!hour) return cell;
+  cell.append(
+    el("span", sunshineMinutes(hour), "sun-minutes"),
+    el(
+      "span",
+      `直達 ${Math.round(hour.direct_radiation_wm2)} / 散乱 ${Math.round(hour.diffuse_radiation_wm2)} W/m²`,
+      "sun-radiation",
+    ),
+  );
+  return cell;
+}
+
+function renderSunshineNote(sunshine) {
+  document.getElementById("sunshine-note").textContent =
+    sunshine.status === "fulfilled"
+      ? "日差しは、その時刻までの 1 時間に日が照っていた時間（Open-Meteo の日照時間）と、その 1 時間の平均の日射（水平面）です。雲量が多くても、薄い高層の雲なら日差しが通ることがあります。"
+      : "日差し：取得できませんでした";
+}
+
+// cloudBaseForecast・sunshine は /cloud-base/forecast・/sunshine の Promise.allSettled の結果。
+function renderHourly(weather, cloudBaseForecast, sunshine) {
   const table = document.getElementById("hourly");
   clear(table);
-  // 時刻で突き合わせる（/weather の hourly と同じ時刻のはず。ない時刻は「—」）。
-  const predictions = new Map();
-  if (cloudBaseForecast.status === "fulfilled") {
-    for (const hour of cloudBaseForecast.value.hourly) predictions.set(hour.time, hour);
-  }
+  // 時刻で突き合わせる（/weather の hourly と同じ時刻のはず。ない時刻は空欄）。
+  const predictions = byTime(cloudBaseForecast);
+  const sun = byTime(sunshine);
+  renderSunshineNote(sunshine);
   const note = document.getElementById("hourly-note");
   if (cloudBaseForecast.status === "fulfilled") {
     note.textContent =
@@ -169,7 +211,16 @@ function renderHourly(weather, cloudBaseForecast) {
     note.textContent = "雲底（予測）：取得できませんでした";
   }
   const head = el("tr");
-  const names = ["時刻", "天気", "気温", "降水確率", "降水量", "雲量（低 / 中 / 高）", "雲底（予測）"];
+  const names = [
+    "時刻",
+    "天気",
+    "気温",
+    "降水確率",
+    "降水量",
+    "雲量（低 / 中 / 高）",
+    "日差し（前の 1 時間）",
+    "雲底（予測）",
+  ];
   for (const name of names) head.append(el("th", name));
   const thead = el("thead");
   thead.append(head);
@@ -183,6 +234,7 @@ function renderHourly(weather, cloudBaseForecast) {
       el("td", `${hour.precipitation_probability} %`, "num"),
       el("td", `${hour.precipitation_mm.toFixed(1)} mm`, "num"),
       cloudCell(hour.cloud_cover),
+      sunshineCell(sun.get(hour.time)),
       cloudBaseCell(predictions.get(hour.time)),
     );
     tbody.append(row);
@@ -519,7 +571,7 @@ async function load(city) {
   for (const button of document.querySelectorAll("[data-city]")) {
     button.setAttribute("aria-pressed", String(button.dataset.city === city));
   }
-  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory] =
+  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory, sunshine] =
     await Promise.allSettled([
     getJson("/weather", city),
     getJson("/daylight", city),
@@ -527,6 +579,7 @@ async function load(city) {
     getJson("/cloud-history", city),
     getJson("/cloud-base/forecast", city),
     getJson("/cloud-base/history", city),
+    getJson("/sunshine", city),
   ]);
   if (id !== loadId) return;
 
@@ -534,8 +587,8 @@ async function load(city) {
   timezone = weather.status === "fulfilled" ? weather.value.timezone : "UTC";
   if (weather.status === "fulfilled") {
     const value = weather.value;
-    renderCurrent(value);
-    renderHourly(value, cloudBaseForecast);
+    renderCurrent(value, sunshine);
+    renderHourly(value, cloudBaseForecast, sunshine);
     renderDaily(value);
     showNotice(value.stale ? `古いデータです（取得：${formatTime(value.fetched_at, true)}）` : "");
   } else {
@@ -543,6 +596,7 @@ async function load(city) {
       showError(document.getElementById(name), "取得できませんでした");
     }
     document.getElementById("hourly-note").textContent = "";
+    document.getElementById("sunshine-note").textContent = "";
     showNotice("天気を取得できなかったため、時刻は UTC で表示しています");
   }
 
