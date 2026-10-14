@@ -137,13 +137,17 @@ function cloudCell(cover) {
   return cell;
 }
 
+// 雲底の高さの表示。上限（1,524 m）は「それより下にシーリングがない」なので「—」にする
+// （画面の注：「—」は 1,524 m 以上）。
+const NO_CEILING = "—";
+
+function formatCeiling(metres) {
+  return metres >= CAP_M ? NO_CEILING : `${metres.toLocaleString("ja-JP")} m`;
+}
+
 function cloudBaseCell(hour) {
-  if (!hour) return el("td", "—", "num");
-  const text =
-    hour.predicted_m >= CAP_M
-      ? `${CAP_M.toLocaleString("ja-JP")} m 以上`
-      : `${hour.predicted_m.toLocaleString("ja-JP")} m`;
-  return el("td", text, "num");
+  // その時刻の予測がない（取得できなかった）ときは空欄。理由は表の下に書く。
+  return el("td", hour ? formatCeiling(hour.predicted_m) : "", "num");
 }
 
 // cloudBaseForecast は /cloud-base/forecast の Promise.allSettled の結果。
@@ -158,7 +162,7 @@ function renderHourly(weather, cloudBaseForecast) {
   const note = document.getElementById("hourly-note");
   if (cloudBaseForecast.status === "fulfilled") {
     note.textContent =
-      "雲底（予測）は、その時刻の予報値から機械学習モデルで推定した値です。先の時刻ほど予報の誤差が入ります。この使い方の精度は測っていません。";
+      "雲底（予測）は、その時刻の予報値から機械学習モデルで推定した値です（「—」は 1,524 m 以上）。先の時刻ほど予報の誤差が入ります。この使い方の精度は測っていません。";
   } else if (cloudBaseForecast.reason.code === "model_unavailable") {
     note.textContent = "雲底（予測）：モデルを読み込めていません";
   } else {
@@ -230,13 +234,9 @@ function renderDaylight(daylight) {
 function renderCloudBase(cloudBase) {
   const box = document.getElementById("cloud-base");
   clear(box);
-  const predicted =
-    cloudBase.predicted_m >= CAP_M
-      ? tile("予測", "なし", "1,524 m より下にシーリングなし")
-      : tile("予測", `${cloudBase.predicted_m.toLocaleString("ja-JP")} m`);
   box.append(
-    predicted,
-    tile("概算式", `${cloudBase.baseline_m.toLocaleString("ja-JP")} m`, "125 ×（気温 − 露点）"),
+    tile("予測", formatCeiling(cloudBase.predicted_m), "機械学習モデル"),
+    tile("概算式", formatCeiling(cloudBase.baseline_m), "125 ×（気温 − 露点）"),
     tile("時刻", formatTime(cloudBase.valid_at), cloudBase.model_version),
   );
 }
@@ -272,13 +272,10 @@ function drawGauge(cloudBase) {
     label.textContent = `${metres.toLocaleString("ja-JP")} m`;
     gauge.append(label);
   }
-  const predictedText =
-    cloudBase.predicted_m >= CAP_M
-      ? `予測 ${CAP_M.toLocaleString("ja-JP")} m 以上`
-      : `予測 ${cloudBase.predicted_m.toLocaleString("ja-JP")} m`;
+  // 上限の印は、バーのいちばん上に「—」として付ける。
   const marks = [
-    { y: gaugeY(cloudBase.predicted_m), text: predictedText, kind: "predicted" },
-    { y: gaugeY(cloudBase.baseline_m), text: `概算式 ${cloudBase.baseline_m.toLocaleString("ja-JP")} m`, kind: "baseline" },
+    { y: gaugeY(cloudBase.predicted_m), text: `予測 ${formatCeiling(cloudBase.predicted_m)}`, kind: "predicted" },
+    { y: gaugeY(cloudBase.baseline_m), text: `概算式 ${formatCeiling(cloudBase.baseline_m)}`, kind: "baseline" },
   ].sort((a, b) => a.y - b.y);
   // ラベルの位置だけをずらす（印はその高さのまま）。
   marks[0].labelY = marks[0].y;
