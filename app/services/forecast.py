@@ -61,6 +61,14 @@ def from_unix(seconds: int) -> datetime:
     return datetime.fromtimestamp(seconds, UTC)
 
 
+def latest_hour(now: datetime) -> datetime:
+    """現在以前の、最も近い正時（UTC）。
+
+    `/cloud-base` の予測する時刻、`/cloud-history` の最後の時刻。
+    """
+    return now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+
+
 def _hourly_columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
     section = raw.get("hourly")
     if not isinstance(section, Mapping):

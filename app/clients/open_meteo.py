@@ -49,6 +49,10 @@ DAILY_VARIABLES = (
     "sunset",
 )
 FORECAST_DAYS = 7
+# hourly の件数（基準は現在の時刻）。過去 24 時間は /cloud-history に使う。
+# past_hours だけを送ると hourly が 16 日分になるので、先の件数も送る（spec.md 7 の表）。
+PAST_HOURS = 24
+FORECAST_HOURS = 7 * 24
 
 
 class _RetryableError(UpstreamError):
@@ -112,6 +116,8 @@ class OpenMeteoClient:
             "timezone": info.timezone,
             "timeformat": "unixtime",
             "forecast_days": FORECAST_DAYS,
+            "past_hours": PAST_HOURS,
+            "forecast_hours": FORECAST_HOURS,
         }
 
     async def _get(self, path: str, params: dict[str, str | float]) -> httpx.Response:

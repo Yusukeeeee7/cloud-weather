@@ -3,7 +3,7 @@
 import logging
 import math
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from app.cities import City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudBaseResponse
-from app.services.forecast import INVALID_RESPONSE_ERRORS, MAX_HOURLY_ROWS
+from app.services.forecast import INVALID_RESPONSE_ERRORS, MAX_HOURLY_ROWS, latest_hour
 from app.services.weather import Clock, Source, get_forecast
 from ml import model as ml_model
 from ml.archive import VARIABLES
@@ -62,7 +62,7 @@ def load_model() -> CloudBaseModel | None:
 
 def valid_at(now: datetime) -> datetime:
     """予測する時刻。現在以前の、最も近い正時（UTC）。"""
-    return now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    return latest_hour(now)
 
 
 def _check_units(raw: Mapping[str, Any]) -> None:
@@ -86,7 +86,8 @@ def _select_row(raw: Mapping[str, Any], at: datetime) -> _RawRow:
         raise ValueError("hourly time is missing or too long")
     if not all(type(value) is int for value in times):
         raise ValueError("hourly time is not unix seconds")
-    # hourly は現地の今日 0 時から入っている。なければ、その時刻の予測はできない。
+    # hourly は取得時の正時の 24 時間前から入っている（#15 より前の保存値は、現地の今日 0 時から）。
+    # なければ、その時刻の予測はできない。
     row = times.index(int(at.timestamp()))
     values: dict[str, Any] = {}
     for name in _RawRow.model_fields:

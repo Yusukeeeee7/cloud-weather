@@ -19,6 +19,9 @@ FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 # 東京 2026-10-13T14:16:25Z、ベルリン 14:16:29Z。
 CLOUD_BASE_NOW = datetime(2026, 10, 13, 14, 16, 30, 123456, tzinfo=UTC)
 
+# 過去 24 時間を含む fixture（#15）を取得した時刻（2 都市とも 2026-10-14T09:18:03Z）の直後。
+PAST_NOW = datetime(2026, 10, 14, 9, 18, 5, 123456, tzinfo=UTC)
+
 RawForecast = dict[str, Any]
 
 
@@ -48,6 +51,10 @@ def load_forecast_iso8601(city: str) -> RawForecast:
 
 def load_cloud_base_forecast(city: str) -> RawForecast:
     return _load(f"forecast_{city}_cloud_base.json")
+
+
+def load_past_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_past.json")
 
 
 @pytest.fixture

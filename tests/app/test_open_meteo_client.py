@@ -61,6 +61,8 @@ def test_client_requests_expected_host_and_params(
         "timezone",
         "timeformat",
         "forecast_days",
+        "past_hours",
+        "forecast_hours",
     }
     assert params["current"] == EXPECTED_CURRENT
     assert params["wind_speed_unit"] == "ms"
@@ -82,6 +84,24 @@ def test_client_requests_hourly_and_daily_params(
     assert params["hourly"] == EXPECTED_HOURLY
     assert params["daily"] == EXPECTED_DAILY
     assert params["timeformat"] == "unixtime"
+    assert params["forecast_days"] == "7"
+
+
+def test_client_requests_past_hours(
+    open_meteo: respx.MockRouter, forecast: Callable[[str], RawForecast]
+) -> None:
+    route = open_meteo.get(FORECAST_URL).mock(
+        return_value=httpx.Response(200, json=forecast("tokyo"))
+    )
+
+    asyncio.run(_fetch(City.TOKYO))
+
+    # 過去 24 時間（/cloud-history）も同じ 1 回の呼び出しで取る。spec.md 7 の表で確認済みの値。
+    # forecast_hours がないと hourly が 16 日分になる。daily のために forecast_days も送り続ける。
+    assert route.call_count == 1
+    params = route.calls.last.request.url.params
+    assert params["past_hours"] == "24"
+    assert params["forecast_hours"] == "168"
     assert params["forecast_days"] == "7"
 
 

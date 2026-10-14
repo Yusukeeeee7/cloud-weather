@@ -105,6 +105,22 @@ class CloudBaseResponse(BaseModel):
     model_version: str
 
 
+class CloudHistoryHour(BaseModel):
+    time: datetime
+    cloud_cover: CloudCover
+
+
+class CloudHistoryResponse(BaseModel):
+    city: str
+    # 古い順に 24 件。最後は現在以前の最も近い正時。値は過去の予報の保存値（観測ではない）。
+    hourly: list[CloudHistoryHour] = Field(
+        description=(
+            "Cloud cover (%) for the past 24 hours, oldest first, ending at the latest hour "
+            "(UTC) at or before now. Values are archived forecasts, not observations."
+        )
+    )
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str
