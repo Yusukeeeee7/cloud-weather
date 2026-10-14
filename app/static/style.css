@@ -290,6 +290,16 @@ td.cloud span {
   stroke-width: 1;
 }
 
+.trend-dot {
+  fill: var(--accent);
+}
+
+.capped-dot {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
 .grid-label {
   fill: var(--muted);
   font-size: 10px;

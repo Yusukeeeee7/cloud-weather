@@ -51,10 +51,16 @@ def _columns(raw: Mapping[str, Any]) -> dict[str, list[Any]]:
     return columns
 
 
+def history_times(now: datetime) -> list[datetime]:
+    """過去 24 時間の時刻（UTC、古い順）。最後は `now` 以前の最も近い正時。"""
+    latest = latest_hour(now)
+    return [latest - timedelta(hours=HISTORY_COUNT - 1 - n) for n in range(HISTORY_COUNT)]
+
+
 def _parse_window(raw: Mapping[str, Any], now: datetime) -> _RawHistory:
     columns = _columns(raw)
     times = columns["time"]
-    first = latest_hour(now) - timedelta(hours=HISTORY_COUNT - 1)
+    first = history_times(now)[0]
     # その時刻の行がなければ ValueError（過去の時間のない保存値など）。
     # 整数でない時刻は、ここで見つからないか、下の strict の検証で落ちる。
     start = times.index(int(first.timestamp()))

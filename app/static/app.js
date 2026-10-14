@@ -354,31 +354,105 @@ function tickIndexes() {
   return indexes;
 }
 
-function drawLine(selected) {
-  const line = document.getElementById("history-line");
-  clear(line);
-  const width = Math.max(line.clientWidth, 240);
-  line.setAttribute("viewBox", `0 0 ${width} ${LINE_HEIGHT}`);
-  line.setAttribute("height", String(LINE_HEIGHT));
+const METRE_TICKS = [0, 500, 1000, CAP_M];
+
+// 折れ線の図を 1 つ描く。values は時刻の順の値（ない時刻は null）。
+// capped(value) が真の値は、線でつながず、図のいちばん上に点で出す（雲底の「—」）。
+function drawChart(chart, { values, max, ticks, tickLabel, capped }, selected) {
+  clear(chart);
+  const width = Math.max(chart.clientWidth, 240);
+  chart.setAttribute("viewBox", `0 0 ${width} ${LINE_HEIGHT}`);
+  chart.setAttribute("height", String(LINE_HEIGHT));
   const x = (index) => lineX(index, width);
-  const y = (percent) => LINE_BOTTOM - (percent / 100) * (LINE_BOTTOM - LINE_TOP);
-  // 横のグリッドと、縦軸の目盛り（%）。文字は線の上の左端に置く。
-  for (const percent of PERCENT_TICKS) {
-    line.append(svg("line", { x1: 0, y1: y(percent), x2: width, y2: y(percent), class: "grid" }));
-    const label = svg("text", { x: 0, y: y(percent) - 3, class: "grid-label" });
-    label.textContent = `${percent} %`;
-    line.append(label);
+  const y = (value) => LINE_BOTTOM - (Math.min(value, max) / max) * (LINE_BOTTOM - LINE_TOP);
+  // 横のグリッドと、縦軸の目盛り。文字は線の上の左端に置く。
+  for (const tick of ticks) {
+    chart.append(svg("line", { x1: 0, y1: y(tick), x2: width, y2: y(tick), class: "grid" }));
+    const label = svg("text", { x: 0, y: y(tick) - 3, class: "grid-label" });
+    label.textContent = tickLabel(tick);
+    chart.append(label);
   }
   // 縦のグリッド（スライダーの目盛りの時刻と同じ位置）。
   for (const index of tickIndexes()) {
-    line.append(svg("line", { x1: x(index), y1: LINE_TOP, x2: x(index), y2: LINE_BOTTOM, class: "grid" }));
+    chart.append(svg("line", { x1: x(index), y1: LINE_TOP, x2: x(index), y2: LINE_BOTTOM, class: "grid" }));
   }
-  const points = history.map((hour, index) => `${x(index)},${y(hour.cloud_cover.total)}`).join(" ");
-  line.append(
-    svg("polyline", { points, class: "trend" }),
-    svg("line", { x1: x(selected), y1: LINE_TOP, x2: x(selected), y2: LINE_BOTTOM, class: "cursor" }),
-    svg("circle", { cx: x(selected), cy: y(history[selected].cloud_cover.total), r: 4, class: "marker" }),
+  // つながる区間ごとに線を引く。
+  let points = [];
+  const flush = () => {
+    if (points.length > 1) chart.append(svg("polyline", { points: points.join(" "), class: "trend" }));
+    else if (points.length === 1) {
+      const [cx, cy] = points[0].split(",");
+      chart.append(svg("circle", { cx, cy, r: 2.5, class: "trend-dot" }));
+    }
+    points = [];
+  };
+  values.forEach((value, index) => {
+    if (value === null || capped(value)) {
+      flush();
+      if (value !== null) chart.append(svg("circle", { cx: x(index), cy: y(max), r: 2.5, class: "capped-dot" }));
+      return;
+    }
+    points.push(`${x(index)},${y(value)}`);
+  });
+  flush();
+  chart.append(svg("line", { x1: x(selected), y1: LINE_TOP, x2: x(selected), y2: LINE_BOTTOM, class: "cursor" }));
+  const value = values[selected];
+  if (value !== null) {
+    chart.append(svg("circle", { cx: x(selected), cy: y(value), r: 4, class: "marker" }));
+  }
+}
+
+function drawLine(selected) {
+  drawChart(
+    document.getElementById("history-line"),
+    {
+      values: history.map((hour) => hour.cloud_cover.total),
+      max: 100,
+      ticks: PERCENT_TICKS,
+      tickLabel: (percent) => `${percent} %`,
+      capped: () => false,
+    },
+    selected,
   );
+}
+
+// 過去 24 時間の雲底（/cloud-base/history）。時刻 → 1 時刻ぶんの値。
+let ceilingByTime = new Map();
+
+function drawCeiling(selected) {
+  const chart = document.getElementById("ceiling-line");
+  if (ceilingByTime.size === 0) return;
+  drawChart(
+    chart,
+    {
+      values: history.map((hour) => {
+        const ceiling = ceilingByTime.get(hour.time);
+        return ceiling ? ceiling.predicted_m : null;
+      }),
+      max: CAP_M,
+      ticks: METRE_TICKS,
+      tickLabel: (metres) => `${metres.toLocaleString("ja-JP")} m`,
+      capped: (metres) => metres >= CAP_M,
+    },
+    selected,
+  );
+}
+
+function renderCeilingHistory(result) {
+  const error = document.getElementById("ceiling-error");
+  const chart = document.getElementById("ceiling-line");
+  if (result.status === "fulfilled") {
+    ceilingByTime = new Map(result.value.hourly.map((hour) => [hour.time, hour]));
+    chart.style.display = "";
+    error.hidden = true;
+    return;
+  }
+  ceilingByTime = new Map();
+  clear(chart);
+  chart.style.display = "none";
+  error.textContent =
+    result.reason.code === "model_unavailable" ? "モデルを読み込めていません" : "取得できませんでした";
+  error.hidden = false;
 }
 
 // スライダーのつまみの中心の位置（%）。つまみの幅のぶん、両端は内側に寄る。
@@ -410,10 +484,13 @@ function showHour(index) {
   bubble.classList.toggle("edge-start", thumbPercent(index) < 20);
   bubble.classList.toggle("edge-end", thumbPercent(index) > 80);
   const cover = hour.cloud_cover;
+  const ceiling = ceilingByTime.get(hour.time);
+  const ceilingText = ceiling ? `・雲底 ${formatCeiling(ceiling.predicted_m)}` : "";
   document.getElementById("history-values").textContent =
-    `全体 ${cover.total} %・低 ${cover.low} %・中 ${cover.mid} %・高 ${cover.high} %`;
+    `全体 ${cover.total} %・低 ${cover.low} %・中 ${cover.mid} %・高 ${cover.high} %${ceilingText}`;
   drawSky(cover);
   drawLine(index);
+  drawCeiling(index);
 }
 
 function renderHistory(data) {
@@ -442,12 +519,14 @@ async function load(city) {
   for (const button of document.querySelectorAll("[data-city]")) {
     button.setAttribute("aria-pressed", String(button.dataset.city === city));
   }
-  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast] = await Promise.allSettled([
+  const [weather, daylight, cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory] =
+    await Promise.allSettled([
     getJson("/weather", city),
     getJson("/daylight", city),
     getJson("/cloud-base", city),
     getJson("/cloud-history", city),
     getJson("/cloud-base/forecast", city),
+    getJson("/cloud-base/history", city),
   ]);
   if (id !== loadId) return;
 
@@ -480,13 +559,18 @@ async function load(city) {
     showError(document.getElementById("cloud-base"), message);
   }
 
+  // showHour が雲底の値を使うので、雲量より先に入れる。
+  renderCeilingHistory(ceilingHistory);
   if (cloudHistory.status === "fulfilled") renderHistory(cloudHistory.value);
   else failHistory();
 }
 
 // 幅が変わったら、折れ線を描き直す。
 window.addEventListener("resize", () => {
-  if (history.length > 0) drawLine(Number(document.getElementById("history-slider").value));
+  if (history.length === 0) return;
+  const selected = Number(document.getElementById("history-slider").value);
+  drawLine(selected);
+  drawCeiling(selected);
 });
 document.getElementById("history-slider").addEventListener("input", (event) => {
   if (history.length > 0) showHour(Number(event.target.value));

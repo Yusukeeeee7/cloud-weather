@@ -132,6 +132,19 @@ class CloudBaseForecastResponse(BaseModel):
     )
 
 
+class CloudBaseHistoryResponse(BaseModel):
+    city: str
+    model_version: str
+    # 入力は過去の時刻の予報の保存値（観測ではない）。
+    hourly: list[CloudBaseForecastHour] = Field(
+        description=(
+            "Predictions for the same 24 hours as /cloud-history, oldest first. Inputs are "
+            "archived forecasts for each hour, not observations; accuracy with forecast inputs "
+            "is not measured."
+        )
+    )
+
+
 class CloudHistoryHour(BaseModel):
     time: datetime
     cloud_cover: CloudCover

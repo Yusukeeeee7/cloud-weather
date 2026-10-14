@@ -55,6 +55,10 @@
         </div>
         <p class="chart-title">全体の雲量（%）の推移</p>
         <svg id="history-line" class="line" viewBox="0 0 320 150" height="150" role="img" aria-label="全体の雲量（%）の推移"></svg>
+        <p class="chart-title">雲底（予測、m）の推移</p>
+        <svg id="ceiling-line" class="line" viewBox="0 0 320 150" height="150" role="img" aria-label="雲底（予測、m）の推移"></svg>
+        <p id="ceiling-error" class="error" hidden></p>
+        <p class="note">雲底は、その時刻の予報値から機械学習モデルで推定した値です。いちばん上の点は「—」（1,524 m 以上。それより下にシーリングがない）の時刻です。</p>
         <p class="note">図の 3 段は高さの目盛りではなく、低層・中層・高層それぞれの雲量（空を覆う割合）です。</p>
         <p class="note">過去の値は Open-Meteo の過去の予報の保存値で、観測値ではありません。</p>
       </div>
