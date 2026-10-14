@@ -30,6 +30,19 @@ https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&curr
 - 東京の先頭の行（2026-10-12T15:00Z）は、上の fixture の取得時刻（`FIXED_NOW`）の正時と同じ。
   「4 項目のない保存値があるときに呼び直す」テストがこれに頼っているので、取り直すときは気をつける。
 
+## 過去 24 時間の雲量（#15 UI）の入力
+
+`/cloud-history` のために、#12 の URL に `past_hours=24&forecast_hours=168` を足した応答（応答は取得したまま）。
+
+| ファイル | 取得日時（UTC） | 取得方法 |
+|---|---|---|
+| `open_meteo/forecast_tokyo_past.json` | 2026-10-14T09:18:03Z | `curl`、#12 の URL（`hourly=` に 4 項目を足したもの）の末尾に `&past_hours=24&forecast_hours=168`（`latitude=35.55&longitude=139.78`、`timezone=Asia/Tokyo`、`timeformat=unixtime`） |
+| `open_meteo/forecast_berlin_past.json` | 2026-10-14T09:18:03Z | 同上で `latitude=52.36&longitude=13.50`、`timezone=Europe/Berlin` |
+
+- `hourly` は 192 行（過去 24 ＋ 先 168）で null はない。先頭は 2 都市とも 2026-10-14T09:00Z（取得時の UTC の正時）の 24 時間前＝2026-10-13T09:00Z、最後は 2026-10-21T08:00Z。
+  現地の 0 時から始まらない（`past_hours`・`forecast_hours` は「現在の時刻」が基準。公式ドキュメントのとおり）。
+- `daily` は 7 行のまま（先頭は現地の今日）。`current.time` は 2026-10-14T09:15Z。
+
 ## 太陽計算（#7 日照）の期待値
 
 `/daylight` は外部APIを呼ばない。下のファイルは、計算結果を比べる相手として 1 回だけ取得したもの。
