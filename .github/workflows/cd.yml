@@ -1,0 +1,79 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+# 同じきっかけ（main・タグ）は 1 つずつ実行する。push の途中で止めないように、実行中のものは止めない。
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # ジョブで指定すると、書かなかった権限は none になる。contents も書く。
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Docker build
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --tag cloud-weather:cd .
+
+      # 外部と通信できない状態で起動する。ホストからは届かないので、
+      # 同じイメージの別のコンテナをネットワークを共有させて、その中でスモークテストを実行する。
+      - name: Start container
+        run: docker run --detach --name api --network none cloud-weather:cd
+
+      - name: Smoke test
+        run: |
+          docker run --rm --network container:api \
+            --volume "${GITHUB_WORKSPACE}/scripts:/scripts:ro" \
+            cloud-weather:cd python /scripts/smoke_test.py
+
+      - name: Show container logs
+        if: failure()
+        run: docker logs api
+
+      # ここから先は、スモークテストが通ったときだけ実行される。
+      - name: Log in to ghcr.io
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      # テストしたイメージにタグを付けて push する（作り直さない）。
+      # イメージ名は小文字だけ（持ち主の名前に大文字があるので変換する）。
+      - name: Push image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cloud-weather"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9A-Za-z._-]{1,127}$ ]]; then
+              echo "tag name is not usable as an image tag" >&2
+              exit 1
+            fi
+            tags=("$GITHUB_REF_NAME")
+          else
+            tags=("latest" "sha-${GITHUB_SHA::7}")
+          fi
+          for tag in "${tags[@]}"; do
+            docker tag cloud-weather:cd "${image}:${tag}"
+            docker push "${image}:${tag}"
+          done
+
+      - name: Log out of ghcr.io
+        if: always()
+        run: docker logout ghcr.io
