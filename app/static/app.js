@@ -26,6 +26,9 @@ const LAYERS = [
 ];
 // 1 段に並べる雲のかたまりの数。雲量に合わせて見せる数を変える。
 const PUFFS = 8;
+// スライダーのつまみの幅（style.css の --thumb と同じ）と、目盛りの時刻の間隔（時間）。
+const THUMB_PX = 18;
+const TICK_EVERY = 6;
 
 let history = [];
 let timezone = "UTC";
@@ -124,11 +127,21 @@ function renderCurrent(weather) {
   );
 }
 
+function cloudCell(cover) {
+  // 全体の雲量と、その下に低・中・高層の雲量。
+  const cell = el("td", null, "num cloud");
+  cell.append(
+    el("span", `${cover.total} %`, "cloud-total"),
+    el("span", `低 ${cover.low} / 中 ${cover.mid} / 高 ${cover.high}`, "cloud-layers"),
+  );
+  return cell;
+}
+
 function renderHourly(weather) {
   const table = document.getElementById("hourly");
   clear(table);
   const head = el("tr");
-  for (const name of ["時刻", "天気", "気温", "降水確率", "降水量", "雲量"]) head.append(el("th", name));
+  for (const name of ["時刻", "天気", "気温", "降水確率", "降水量", "雲量（低 / 中 / 高）"]) head.append(el("th", name));
   const thead = el("thead");
   thead.append(head);
   const tbody = el("tbody");
@@ -140,7 +153,7 @@ function renderHourly(weather) {
       el("td", `${hour.temperature_c.toFixed(1)} ℃`, "num"),
       el("td", `${hour.precipitation_probability} %`, "num"),
       el("td", `${hour.precipitation_mm.toFixed(1)} mm`, "num"),
-      el("td", `${hour.cloud_cover.total} %`, "num"),
+      cloudCell(hour.cloud_cover),
     );
     tbody.append(row);
   }
@@ -202,6 +215,73 @@ function renderCloudBase(cloudBase) {
   );
 }
 
+// 雲底の高さの縦バー。0〜1,524 m の目盛りに、予測と概算式の高さの印を付ける。
+const GAUGE = { top: 16, bottom: 184, barX: 64, barWidth: 12, ticks: [0, 500, 1000, CAP_M] };
+// 2 つの印のラベルが重ならないための、縦の最小の間隔。
+const GAUGE_LABEL_GAP = 16;
+
+function gaugeY(metres) {
+  const ratio = Math.min(Math.max(metres, 0), CAP_M) / CAP_M;
+  return GAUGE.bottom - ratio * (GAUGE.bottom - GAUGE.top);
+}
+
+function drawGauge(cloudBase) {
+  const gauge = document.getElementById("cloud-base-gauge");
+  clear(gauge);
+  gauge.style.display = "";
+  gauge.append(
+    svg("rect", {
+      x: GAUGE.barX,
+      y: GAUGE.top,
+      width: GAUGE.barWidth,
+      height: GAUGE.bottom - GAUGE.top,
+      rx: 3,
+      class: "gauge-bar",
+    }),
+  );
+  for (const metres of GAUGE.ticks) {
+    const y = gaugeY(metres);
+    gauge.append(svg("line", { x1: GAUGE.barX - 6, y1: y, x2: GAUGE.barX, y2: y, class: "gauge-tick" }));
+    const label = svg("text", { x: GAUGE.barX - 10, y: y + 4, class: "gauge-label" });
+    label.textContent = `${metres.toLocaleString("ja-JP")} m`;
+    gauge.append(label);
+  }
+  const predictedText =
+    cloudBase.predicted_m >= CAP_M
+      ? `予測 ${CAP_M.toLocaleString("ja-JP")} m 以上`
+      : `予測 ${cloudBase.predicted_m.toLocaleString("ja-JP")} m`;
+  const marks = [
+    { y: gaugeY(cloudBase.predicted_m), text: predictedText, kind: "predicted" },
+    { y: gaugeY(cloudBase.baseline_m), text: `概算式 ${cloudBase.baseline_m.toLocaleString("ja-JP")} m`, kind: "baseline" },
+  ].sort((a, b) => a.y - b.y);
+  // ラベルの位置だけをずらす（印はその高さのまま）。
+  marks[0].labelY = marks[0].y;
+  marks[1].labelY = Math.max(marks[1].y, marks[0].labelY + GAUGE_LABEL_GAP);
+  if (marks[1].labelY > GAUGE.bottom + 4) {
+    marks[1].labelY = GAUGE.bottom + 4;
+    marks[0].labelY = Math.min(marks[0].labelY, marks[1].labelY - GAUGE_LABEL_GAP);
+  }
+  const right = GAUGE.barX + GAUGE.barWidth;
+  for (const mark of marks) {
+    gauge.append(
+      svg("line", { x1: GAUGE.barX - 2, y1: mark.y, x2: right + 2, y2: mark.y, class: `gauge-mark ${mark.kind}` }),
+      svg("polygon", {
+        points: `${right + 4},${mark.y} ${right + 12},${mark.y - 5} ${right + 12},${mark.y + 5}`,
+        class: `gauge-pointer ${mark.kind}`,
+      }),
+    );
+    const label = svg("text", { x: right + 16, y: mark.labelY + 4, class: `gauge-text ${mark.kind}` });
+    label.textContent = mark.text;
+    gauge.append(label);
+  }
+}
+
+function hideGauge() {
+  const gauge = document.getElementById("cloud-base-gauge");
+  clear(gauge);
+  gauge.style.display = "none";
+}
+
 // --- 過去 24 時間 ---
 
 function drawSky(cover) {
@@ -247,11 +327,37 @@ function drawLine(selected) {
   );
 }
 
+// スライダーのつまみの中心の位置（%）。つまみの幅のぶん、両端は内側に寄る。
+function thumbPercent(index) {
+  return (index / (history.length - 1)) * 100;
+}
+
+function placeOnSlider(node, index) {
+  const percent = thumbPercent(index);
+  node.style.left = `calc(${percent}% + ${(0.5 - percent / 100) * THUMB_PX}px)`;
+}
+
+function renderTicks() {
+  const ticks = document.getElementById("history-ticks");
+  clear(ticks);
+  for (let index = 0; index < history.length; index += TICK_EVERY) {
+    const tick = el("span", formatTime(history[index].time), "slider-tick");
+    placeOnSlider(tick, index);
+    ticks.append(tick);
+  }
+  const last = el("span", formatTime(history[history.length - 1].time), "slider-tick");
+  placeOnSlider(last, history.length - 1);
+  ticks.append(last);
+}
+
 function showHour(index) {
   const hour = history[index];
   const ago = history.length - 1 - index;
-  document.getElementById("history-time").textContent =
-    `${formatTime(hour.time, true)}（${ago === 0 ? "最新" : `${ago} 時間前`}）`;
+  const bubble = document.getElementById("history-time");
+  bubble.textContent = `${formatTime(hour.time, true)}（${ago === 0 ? "最新" : `${ago} 時間前`}）`;
+  placeOnSlider(bubble, index);
+  bubble.classList.toggle("edge-start", thumbPercent(index) < 20);
+  bubble.classList.toggle("edge-end", thumbPercent(index) > 80);
   const cover = hour.cloud_cover;
   document.getElementById("history-values").textContent =
     `全体 ${cover.total} %・低 ${cover.low} %・中 ${cover.mid} %・高 ${cover.high} %`;
@@ -266,6 +372,7 @@ function renderHistory(data) {
   slider.value = slider.max;
   document.getElementById("history").hidden = false;
   document.getElementById("history-error").hidden = true;
+  renderTicks();
   showHour(history.length - 1);
 }
 
@@ -310,10 +417,15 @@ async function load(city) {
   if (daylight.status === "fulfilled") renderDaylight(daylight.value);
   else showError(document.getElementById("daylight"), "取得できませんでした");
 
-  if (cloudBase.status === "fulfilled") renderCloudBase(cloudBase.value);
-  else if (cloudBase.reason.code === "model_unavailable") {
-    showError(document.getElementById("cloud-base"), "モデルを読み込めていません");
-  } else showError(document.getElementById("cloud-base"), "取得できませんでした");
+  if (cloudBase.status === "fulfilled") {
+    renderCloudBase(cloudBase.value);
+    drawGauge(cloudBase.value);
+  } else {
+    hideGauge();
+    const message =
+      cloudBase.reason.code === "model_unavailable" ? "モデルを読み込めていません" : "取得できませんでした";
+    showError(document.getElementById("cloud-base"), message);
+  }
 
   if (cloudHistory.status === "fulfilled") renderHistory(cloudHistory.value);
   else failHistory();

@@ -188,20 +188,79 @@ td.num {
   font-variant-numeric: tabular-nums;
 }
 
-.history-head {
+.cloud-base-body {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 16px;
 }
 
-#history-time {
-  font-size: 1.1rem;
+.cloud-base-body .tiles {
+  flex: 1 1 160px;
+  grid-template-columns: 1fr;
+}
+
+.gauge {
+  flex: 0 1 220px;
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+}
+
+.gauge-bar {
+  fill: var(--border);
+}
+
+.gauge-tick {
+  stroke: var(--muted);
+}
+
+.gauge-label {
+  fill: var(--muted);
+  font-size: 10px;
+  text-anchor: end;
+}
+
+.gauge-mark {
+  stroke-width: 2;
+}
+
+.gauge-mark.predicted,
+.gauge-pointer.predicted {
+  stroke: var(--accent);
+  fill: var(--accent);
+}
+
+.gauge-mark.baseline,
+.gauge-pointer.baseline {
+  stroke: var(--muted);
+  fill: var(--muted);
+}
+
+.gauge-text {
+  font-size: 11px;
   font-weight: 600;
 }
 
+.gauge-text.predicted {
+  fill: var(--accent);
+}
+
+.gauge-text.baseline {
+  fill: var(--muted);
+}
+
+td.cloud span {
+  display: block;
+}
+
+.cloud-layers {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .history-values {
+  margin: 0 0 8px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -243,10 +302,101 @@ td.num {
   font-weight: 600;
 }
 
+/* 過去 24 時間のスライダー。つまみの幅（--thumb）は app.js の THUMB_PX と同じ。 */
+.slider {
+  --thumb: 18px;
+  margin: 12px 0 8px;
+}
+
+.slider-track {
+  position: relative;
+  height: 2.1rem;
+}
+
+.slider-bubble {
+  position: absolute;
+  bottom: 4px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 両端では、吹き出しが枠の外にはみ出さないように寄せる。 */
+.slider-bubble.edge-start {
+  transform: translateX(calc(var(--thumb) / -2));
+}
+
+.slider-bubble.edge-end {
+  transform: translateX(calc(-100% + var(--thumb) / 2));
+}
+
 input[type="range"] {
+  display: block;
   width: 100%;
-  margin: 12px 0 4px;
-  accent-color: var(--accent);
+  height: var(--thumb);
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: calc((6px - var(--thumb)) / 2);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  -webkit-appearance: none;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  box-sizing: border-box;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.slider-ticks {
+  position: relative;
+  height: 1.2rem;
+  margin-top: 4px;
+}
+
+.slider-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.slider-tick:first-child {
+  transform: translateX(calc(var(--thumb) / -2));
+}
+
+.slider-tick:last-child {
+  transform: translateX(calc(-100% + var(--thumb) / 2));
 }
 
 .axis {

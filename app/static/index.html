@@ -24,7 +24,16 @@
 
     <section class="card" aria-labelledby="cloud-base-title">
       <h2 id="cloud-base-title">雲底（シーリング）</h2>
-      <div id="cloud-base" class="tiles"></div>
+      <div class="cloud-base-body">
+        <div id="cloud-base" class="tiles"></div>
+        <svg id="cloud-base-gauge" class="gauge" viewBox="0 0 220 200" role="img" aria-label="雲底の高さ（0〜1,524 m）"></svg>
+      </div>
+      <p class="note">
+        予測：機械学習モデル（LightGBM）が、いまの正時の予報値（気温・露点・湿度・気圧・風速・雲量・降水量）と時刻・都市から推定した雲底の高さです。
+        雲底（シーリング）は、空の半分以上を覆う雲（METAR の BKN・OVC）のうち、いちばん低い層の高さです。
+        モデルは 1,524 m（5,000 ft）までを扱い、それより下にシーリングがないと予測したときは「なし」と表示します。
+      </p>
+      <p class="note">概算式：気温と露点の差から求める目安（125 m ×（気温 − 露点））。予測と比べるために並べています。</p>
     </section>
 
     <section class="card" aria-labelledby="daylight-title">
@@ -35,13 +44,17 @@
     <section class="card wide" aria-labelledby="history-title">
       <h2 id="history-title">過去 24 時間の雲量</h2>
       <div id="history">
-        <div class="history-head">
-          <output id="history-time" for="history-slider"></output>
-          <span id="history-values" class="history-values"></span>
-        </div>
+        <p id="history-values" class="history-values"></p>
         <svg id="history-sky" class="sky" viewBox="0 0 320 180" role="img" aria-label="選んだ時刻の雲の様子"></svg>
-        <input id="history-slider" type="range" min="0" max="23" step="1" value="23" aria-label="時刻を選ぶ（過去 24 時間）">
+        <div class="slider">
+          <div class="slider-track">
+            <output id="history-time" class="slider-bubble" for="history-slider"></output>
+          </div>
+          <input id="history-slider" type="range" min="0" max="23" step="1" value="23" aria-label="時刻を選ぶ（過去 24 時間）">
+          <div id="history-ticks" class="slider-ticks" aria-hidden="true"></div>
+        </div>
         <svg id="history-line" class="line" viewBox="0 0 320 60" role="img" aria-label="全体の雲量の推移"></svg>
+        <p class="note">図の 3 段は高さの目盛りではなく、低層・中層・高層それぞれの雲量（空を覆う割合）です。</p>
         <p class="note">過去の値は Open-Meteo の過去の予報の保存値で、観測値ではありません。</p>
       </div>
       <p id="history-error" class="error" hidden></p>
