@@ -336,16 +336,47 @@ function drawSky(cover) {
   }
 }
 
+// 折れ線の大きさ（px）。幅は表示している幅に合わせて描き直す（引き伸ばすと線と文字が太るため）。
+const LINE_HEIGHT = 150;
+const LINE_TOP = 14;
+const LINE_BOTTOM = 130;
+const PERCENT_TICKS = [0, 25, 50, 75, 100];
+
+// 横の位置は、スライダーのつまみの中心と同じにする（目盛りの時刻と縦のグリッドがそろう）。
+function lineX(index, width) {
+  return THUMB_PX / 2 + (index * (width - THUMB_PX)) / (history.length - 1);
+}
+
+function tickIndexes() {
+  const indexes = [];
+  for (let index = 0; index < history.length; index += TICK_EVERY) indexes.push(index);
+  if (indexes[indexes.length - 1] !== history.length - 1) indexes.push(history.length - 1);
+  return indexes;
+}
+
 function drawLine(selected) {
   const line = document.getElementById("history-line");
   clear(line);
-  const x = (index) => 8 + (index * (320 - 16)) / (history.length - 1);
-  const y = (percent) => 52 - (percent / 100) * 44;
+  const width = Math.max(line.clientWidth, 240);
+  line.setAttribute("viewBox", `0 0 ${width} ${LINE_HEIGHT}`);
+  line.setAttribute("height", String(LINE_HEIGHT));
+  const x = (index) => lineX(index, width);
+  const y = (percent) => LINE_BOTTOM - (percent / 100) * (LINE_BOTTOM - LINE_TOP);
+  // 横のグリッドと、縦軸の目盛り（%）。文字は線の上の左端に置く。
+  for (const percent of PERCENT_TICKS) {
+    line.append(svg("line", { x1: 0, y1: y(percent), x2: width, y2: y(percent), class: "grid" }));
+    const label = svg("text", { x: 0, y: y(percent) - 3, class: "grid-label" });
+    label.textContent = `${percent} %`;
+    line.append(label);
+  }
+  // 縦のグリッド（スライダーの目盛りの時刻と同じ位置）。
+  for (const index of tickIndexes()) {
+    line.append(svg("line", { x1: x(index), y1: LINE_TOP, x2: x(index), y2: LINE_BOTTOM, class: "grid" }));
+  }
   const points = history.map((hour, index) => `${x(index)},${y(hour.cloud_cover.total)}`).join(" ");
   line.append(
-    svg("line", { x1: 8, y1: 52, x2: 312, y2: 52, class: "axis" }),
     svg("polyline", { points, class: "trend" }),
-    svg("line", { x1: x(selected), y1: 4, x2: x(selected), y2: 52, class: "cursor" }),
+    svg("line", { x1: x(selected), y1: LINE_TOP, x2: x(selected), y2: LINE_BOTTOM, class: "cursor" }),
     svg("circle", { cx: x(selected), cy: y(history[selected].cloud_cover.total), r: 4, class: "marker" }),
   );
 }
@@ -363,14 +394,11 @@ function placeOnSlider(node, index) {
 function renderTicks() {
   const ticks = document.getElementById("history-ticks");
   clear(ticks);
-  for (let index = 0; index < history.length; index += TICK_EVERY) {
+  for (const index of tickIndexes()) {
     const tick = el("span", formatTime(history[index].time), "slider-tick");
     placeOnSlider(tick, index);
     ticks.append(tick);
   }
-  const last = el("span", formatTime(history[history.length - 1].time), "slider-tick");
-  placeOnSlider(last, history.length - 1);
-  ticks.append(last);
 }
 
 function showHour(index) {
@@ -456,6 +484,10 @@ async function load(city) {
   else failHistory();
 }
 
+// 幅が変わったら、折れ線を描き直す。
+window.addEventListener("resize", () => {
+  if (history.length > 0) drawLine(Number(document.getElementById("history-slider").value));
+});
 document.getElementById("history-slider").addEventListener("input", (event) => {
   if (history.length > 0) showHour(Number(event.target.value));
 });

@@ -265,11 +265,34 @@ td.cloud span {
   font-variant-numeric: tabular-nums;
 }
 
-.sky,
-.line {
+.sky {
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* 折れ線は、表示している幅で描き直す（app.js の drawLine）。高さは固定。 */
+.line {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+
+.chart-title {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.grid-label {
+  fill: var(--muted);
+  font-size: 10px;
 }
 
 .sky {
