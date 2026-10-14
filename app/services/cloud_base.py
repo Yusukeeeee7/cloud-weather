@@ -3,7 +3,7 @@
 import logging
 import math
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from app.cities import City
 from app.clients.open_meteo import OpenMeteoClient
 from app.errors import UpstreamError
 from app.schemas import CloudBaseResponse
-from app.services.forecast import INVALID_RESPONSE_ERRORS, MAX_HOURLY_ROWS
+from app.services.forecast import INVALID_RESPONSE_ERRORS, hourly_columns, latest_hour
 from app.services.weather import Clock, Source, get_forecast
 from ml import model as ml_model
 from ml.archive import VARIABLES
@@ -62,7 +62,7 @@ def load_model() -> CloudBaseModel | None:
 
 def valid_at(now: datetime) -> datetime:
     """予測する時刻。現在以前の、最も近い正時（UTC）。"""
-    return now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    return latest_hour(now)
 
 
 def _check_units(raw: Mapping[str, Any]) -> None:
@@ -76,43 +76,46 @@ def _check_units(raw: Mapping[str, Any]) -> None:
             raise ValueError("unexpected hourly unit")
 
 
-def _select_row(raw: Mapping[str, Any], at: datetime) -> _RawRow:
+def _select_rows(raw: Mapping[str, Any], ats: list[datetime]) -> list[_RawRow]:
+    """hourly から、その時刻の行を順に選んで検証する。1 つでも使えなければ ValueError。"""
     _check_units(raw)
-    section = raw.get("hourly")
-    if not isinstance(section, Mapping):
-        raise ValueError("hourly is not an object")
-    times = section.get("time")
-    if not isinstance(times, list) or len(times) > MAX_HOURLY_ROWS:
-        raise ValueError("hourly time is missing or too long")
+    columns = hourly_columns(raw, ["time", *_RawRow.model_fields])
+    times = columns.pop("time")
     if not all(type(value) is int for value in times):
         raise ValueError("hourly time is not unix seconds")
-    # hourly は現地の今日 0 時から入っている。なければ、その時刻の予測はできない。
-    row = times.index(int(at.timestamp()))
-    values: dict[str, Any] = {}
+    selected: list[_RawRow] = []
+    for at in ats:
+        # hourly は取得時の正時の 24 時間前から入っている
+        # （#15 より前の保存値は、現地の今日 0 時から）。なければ、その時刻の予測はできない。
+        row = times.index(int(at.timestamp()))
+        # 使う行だけを検証する（先の時刻は値が null のことがあるため）。
+        selected.append(
+            _RawRow.model_validate({name: column[row] for name, column in columns.items()})
+        )
+    return selected
+
+
+def input_rows(city: City, raw: Mapping[str, Any], ats: list[datetime]) -> pd.DataFrame:
+    """hourly からその時刻の行を選び、`ml.features.features` に渡す表にする（時刻の順）。
+
+    使えない行があれば ValueError などの INVALID_RESPONSE_ERRORS（呼ぶ側で UpstreamError にする）。
+    """
+    rows = _select_rows(raw, ats)
+    table = pd.DataFrame({"city": [city.value] * len(ats), "time": pd.to_datetime(ats, utc=True)})
     for name in _RawRow.model_fields:
-        column = section.get(name)
-        # 長さが違う列は、どの行がどの時刻か分からない。
-        if not isinstance(column, list) or len(column) != len(times):
-            raise ValueError("hourly column is missing or has an unexpected length")
-        values[name] = column[row]
-    # 使う行だけを検証する（先の時刻は値が null のことがあるため）。
-    return _RawRow.model_validate(values)
+        # 学習データを作るとき（ml/archive.py）と同じ対応で、列の名前を付ける。
+        column, _ = VARIABLES[name]
+        table[column] = pd.Series([getattr(row, name) for row in rows], dtype="float64")
+    return table
 
 
 def input_row(city: City, raw: Mapping[str, Any], now: datetime) -> pd.DataFrame:
     """hourly から `valid_at` の行を選び、`ml.features.features` に渡す 1 行の表にする。"""
-    at = valid_at(now)
     try:
-        row = _select_row(raw, at)
+        return input_rows(city, raw, [valid_at(now)])
     except INVALID_RESPONSE_ERRORS as exc:
         logger.warning("open-meteo response has no usable hourly row for cloud base")
         raise UpstreamError("invalid hourly row") from exc
-    table = pd.DataFrame({"city": [city.value], "time": pd.to_datetime([at], utc=True)})
-    for name, value in row.model_dump().items():
-        # 学習データを作るとき（ml/archive.py）と同じ対応で、列の名前を付ける。
-        column, _ = VARIABLES[name]
-        table[column] = pd.Series([value], dtype="float64")
-    return table
 
 
 def _round_m(value: float) -> int:
@@ -120,17 +123,26 @@ def _round_m(value: float) -> int:
     return math.floor(value + 0.5)
 
 
+def predict_rows(model: CloudBaseModel, table: pd.DataFrame) -> tuple[list[int], list[int]]:
+    """表の各行の予測と概算式（どちらも 0〜1,524 m の整数）。モデルは 1 回だけ呼ぶ。"""
+    predicted = ml_model.predict_m(model, features(table))
+    baseline = baseline_m(table["temperature_c"], table["dew_point_c"])
+    return (
+        [_round_m(float(value)) for value in predicted],
+        [_round_m(float(value)) for value in baseline],
+    )
+
+
 def build_cloud_base_response(
     city: City, raw: Mapping[str, Any], now: datetime, model: CloudBaseModel
 ) -> CloudBaseResponse:
     table = input_row(city, raw, now)
-    predicted = ml_model.predict_m(model, features(table))
-    baseline = baseline_m(table["temperature_c"], table["dew_point_c"])
+    predicted, baseline = predict_rows(model, table)
     return CloudBaseResponse(
         city=city.value,
         valid_at=valid_at(now),
-        predicted_m=_round_m(float(predicted.iloc[0])),
-        baseline_m=_round_m(float(baseline.iloc[0])),
+        predicted_m=predicted[0],
+        baseline_m=baseline[0],
         model_version=model.model_version,
     )
 

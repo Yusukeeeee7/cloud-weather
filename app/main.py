@@ -2,13 +2,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.cache import build_cache
 from app.clients.open_meteo import OpenMeteoClient, build_http_client
 from app.config import get_settings
 from app.errors import register_exception_handlers
 from app.logging_config import configure_logging
-from app.routers import cloud_base, daylight, health, weather
+from app.routers import cloud_base, cloud_history, daylight, health, sunshine, ui, weather
 from app.services.cloud_base import load_model
 
 
@@ -33,3 +34,7 @@ app.include_router(health.router)
 app.include_router(daylight.router)
 app.include_router(weather.router)
 app.include_router(cloud_base.router)
+app.include_router(cloud_history.router)
+app.include_router(sunshine.router)
+app.include_router(ui.router)
+app.mount("/static", StaticFiles(directory=ui.STATIC_DIR), name="static")

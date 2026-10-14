@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cloud-weather</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>cloud-weather</h1>
+    <nav class="cities" aria-label="都市">
+      <button type="button" data-city="tokyo" aria-pressed="true">東京</button>
+      <button type="button" data-city="berlin" aria-pressed="false">ベルリン</button>
+    </nav>
+  </header>
+  <p id="notice" class="notice" hidden></p>
+
+  <main>
+    <section class="card" aria-labelledby="current-title">
+      <h2 id="current-title">現在</h2>
+      <div id="current" class="tiles" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="cloud-base-title">
+      <h2 id="cloud-base-title">雲底（シーリング）</h2>
+      <div class="cloud-base-body">
+        <div id="cloud-base" class="tiles"></div>
+        <svg id="cloud-base-gauge" class="gauge" viewBox="0 0 220 200" role="img" aria-label="雲底の高さ（0〜1,524 m）"></svg>
+      </div>
+      <p class="note">
+        予測：機械学習モデル（LightGBM）が、いまの正時の予報値（気温・露点・湿度・気圧・風速・雲量・降水量）と時刻・都市から推定した雲底の高さです。
+        雲底（シーリング）は、空港の観測（METAR）で BKN・OVC と報告される雲のうち、いちばん低い層の高さです。
+        モデルは 1,524 m（5,000 ft）までを扱います。<strong>「—」は、雲底が 1,524 m 以上（それより下にシーリングがない）</strong>という意味です。
+      </p>
+      <p class="note">概算式：気温と露点の差から求める目安（125 m ×（気温 − 露点））。予測と比べるために並べています。</p>
+    </section>
+
+    <section class="card" aria-labelledby="daylight-title">
+      <h2 id="daylight-title">日照</h2>
+      <div id="daylight" class="tiles"></div>
+    </section>
+
+    <section class="card wide" aria-labelledby="history-title">
+      <h2 id="history-title">過去 24 時間の雲量</h2>
+      <div id="history">
+        <p id="history-values" class="history-values"></p>
+        <svg id="history-sky" class="sky" viewBox="0 0 320 180" role="img" aria-label="選んだ時刻の雲の様子"></svg>
+        <div class="slider">
+          <div class="slider-track">
+            <output id="history-time" class="slider-bubble" for="history-slider"></output>
+          </div>
+          <input id="history-slider" type="range" min="0" max="23" step="1" value="23" aria-label="時刻を選ぶ（過去 24 時間）">
+          <div id="history-ticks" class="slider-ticks" aria-hidden="true"></div>
+        </div>
+        <p class="chart-title">全体の雲量（%）の推移</p>
+        <svg id="history-line" class="line" viewBox="0 0 320 150" height="150" role="img" aria-label="全体の雲量（%）の推移"></svg>
+        <p class="chart-title">雲底（予測、m）の推移</p>
+        <svg id="ceiling-line" class="line" viewBox="0 0 320 150" height="150" role="img" aria-label="雲底（予測、m）の推移"></svg>
+        <p id="ceiling-error" class="error" hidden></p>
+        <p class="note">雲底は、その時刻の予報値から機械学習モデルで推定した値です。いちばん上の点は「—」（1,524 m 以上。それより下にシーリングがない）の時刻です。</p>
+        <p class="note">図の 3 段は高さの目盛りではなく、低層・中層・高層それぞれの雲量（空を覆う割合）です。</p>
+        <p class="note">過去の値は Open-Meteo の過去の予報の保存値で、観測値ではありません。</p>
+      </div>
+      <p id="history-error" class="error" hidden></p>
+    </section>
+
+    <section class="card wide" aria-labelledby="hourly-title">
+      <h2 id="hourly-title">24 時間の予報</h2>
+      <div class="scroll"><table id="hourly"></table></div>
+      <p id="sunshine-note" class="note"></p>
+      <p id="hourly-note" class="note"></p>
+    </section>
+
+    <section class="card wide" aria-labelledby="daily-title">
+      <h2 id="daily-title">7 日間の予報</h2>
+      <div class="scroll"><table id="daily"></table></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>（CC BY 4.0）
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

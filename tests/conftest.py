@@ -1,9 +1,11 @@
+import copy
 import json
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -18,6 +20,12 @@ FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 # /cloud-base 用の fixture（hourly に 4 項目を足した応答）を取得した時刻の直後。
 # 東京 2026-10-13T14:16:25Z、ベルリン 14:16:29Z。
 CLOUD_BASE_NOW = datetime(2026, 10, 13, 14, 16, 30, 123456, tzinfo=UTC)
+
+# 過去 24 時間を含む fixture（#15）を取得した時刻（2 都市とも 2026-10-14T09:18:03Z）の直後。
+PAST_NOW = datetime(2026, 10, 14, 9, 18, 5, 123456, tzinfo=UTC)
+
+# 日差しの 3 項目を含む fixture（#15）を取得した時刻（2026-10-14T12:20:49Z〜12:21:02Z）の直後。
+SUN_NOW = datetime(2026, 10, 14, 12, 21, 5, 123456, tzinfo=UTC)
 
 RawForecast = dict[str, Any]
 
@@ -48,6 +56,14 @@ def load_forecast_iso8601(city: str) -> RawForecast:
 
 def load_cloud_base_forecast(city: str) -> RawForecast:
     return _load(f"forecast_{city}_cloud_base.json")
+
+
+def load_past_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_past.json")
+
+
+def load_sun_forecast(city: str) -> RawForecast:
+    return _load(f"forecast_{city}_sun.json")
 
 
 @pytest.fixture
@@ -89,3 +105,32 @@ def client(open_meteo: respx.MockRouter) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+# --- 外部APIのモックと応答の確認（#15 のテストで共有する） ---
+
+
+def iso(at: datetime) -> str:
+    """応答の時刻の書き方（UTC、末尾 Z、秒まで）。"""
+    return at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def mock_ok(open_meteo: respx.MockRouter, raw: RawForecast) -> respx.Route:
+    return open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(200, json=raw))
+
+
+def assert_error(response: httpx.Response, status: int, code: str) -> None:
+    """spec.md「5. 共通」のエラー形式で、その HTTP と code であること。"""
+    assert response.status_code == status
+    body = response.json()
+    assert set(body) == {"error"}
+    assert set(body["error"]) == {"code", "message"}
+    assert body["error"]["code"] == code
+    assert isinstance(body["error"]["message"], str) and body["error"]["message"]
+
+
+def without_past_hours(raw: RawForecast) -> RawForecast:
+    """過去の時間を足す前の形（hourly が取得時の正時から始まる）。fixture の先頭 24 行を除く。"""
+    changed = copy.deepcopy(raw)
+    changed["hourly"] = {name: column[24:] for name, column in raw["hourly"].items()}
+    return changed
