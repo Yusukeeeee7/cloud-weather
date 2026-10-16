@@ -1,4 +1,5 @@
-# ベースイメージと uv のイメージは、タグと digest で固定する（#21）。Dependabot（docker）が両方を更新する。
+# ベースイメージと uv のイメージは、タグと digest で固定する（#21）。Dependabot（docker）が更新できる形にする
+# （同じタグのまま digest だけを上げる PR が実際に来るかは、次の Dependabot の実行で確かめる）。
 # Dependabot は FROM の行しか読まないので、uv も COPY --from=<イメージ> でなく、FROM の段にしてから使う。
 # uv の版を上げたら、ci.yml の setup-uv の version も手で合わせる。
 FROM ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 AS uv
