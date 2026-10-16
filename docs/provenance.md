@@ -10,6 +10,10 @@ CD（`.github/workflows/cd.yml`）は、ghcr.io に push したイメージに 2
 どちらも Sigstore の短い期間の証明書で署名され（鍵は持たない）、イメージの隣（同じ ghcr.io のパッケージ）に置かれる。
 検証は、署名が本物か、書類が**この digest のイメージ**のものか、作ったのが**このリポジトリ**かを確かめる。
 
+- 来歴が SLSA の形式なのは、`actions/attest` の README（v4.2.2）の「既定で SLSA build provenance を作る」による（WebFetch の要約で読んだ）。
+- SBOM の文書の名前は、イメージ名ではなく `/scan/image.tar` になる（Trivy に tar を渡しているため）。部品の一覧には影響しない。
+- push の後の digest の問い合わせや attest が失敗すると、署名のないイメージが push 済みになる（digest はレジストリから取るので、push の前には動かせない）。そのときは CD を再実行して付け直す。
+
 ## 使える条件（2026-10-16 に確かめた）
 
 | 対象 | いまの状態 | 使えるか |
@@ -53,7 +57,7 @@ CD（`.github/workflows/cd.yml`）は、ghcr.io に push したイメージに 2
      --predicate-type https://spdx.dev/Document/v2.3
    ```
 
-5. 失敗することも確かめる（別のリポジトリを指定する。検証が本当に出どころを見ているか）。
+5. 失敗することも確かめる（別のリポジトリを指定すると、attestation が見つからず失敗する。入口の確認で、署名が別のリポジトリのものだと見抜けることの確認にはならない）。
 
    ```bash
    gh attestation verify oci://ghcr.io/yusukeeeee7/cloud-weather:sha-<短いSHA> -R Yusukeeeee7/does-not-exist
@@ -70,4 +74,4 @@ CD（`.github/workflows/cd.yml`）は、ghcr.io に push したイメージに 2
 |---|---|---|---|
 | （未実施） | | 3 来歴 | |
 | （未実施） | | 4 SBOM | |
-| （未実施） | | 5 別のリポジトリ（失敗するはず） | |
+| （未実施） | | 5 別のリポジトリ（見つからず失敗するはず） | |

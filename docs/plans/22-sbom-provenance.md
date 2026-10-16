@@ -90,7 +90,7 @@ Docker build → Start container → Smoke test → Trivy DB → Trivy (image) �
 | 6 | main へのマージ後に `cd.yml` が動く | 正常 | push の後に attest の 2 つの手順が成功し、要約（summary）に attestation が出る（人間が Actions の画面で確認） |
 | 7 | 人間が手元で `gh attestation verify oci://ghcr.io/yusukeeeee7/cloud-weather:sha-<短いSHA> -R Yusukeeeee7/cloud-weather` | 正常 | 来歴の検証が成功する。表示（ワークフロー・コミット）を `docs/provenance.md` に記録 |
 | 8 | 7 と同じく、`--predicate-type https://spdx.dev/Document/v2.3` を付けて検証 | 正常 | SBOM の検証が成功する |
-| 9 | 7 を、別のリポジトリ（例：`-R Yusukeeeee7/存在しない名前`）を指定して実行 | 異常 | 失敗する（**検証が本当に出どころを見ていること**。結果によって docs の書き方が変わる確認） |
+| 9 | 7 を、別のリポジトリ（例：`-R Yusukeeeee7/存在しない名前`）を指定して実行 | 異常 | 失敗する（attestation が見つからないことの、入口の確認。署名が別のリポジトリのものだと見抜けることの確認にはならない。レビューで修正） |
 
 - 6〜9 は AI から見えない・実行できないので、人間が行う。spec の状態は「実装済み（main へのマージ後の CD で確認）」→ 7〜9 の後に「完了」。
 
