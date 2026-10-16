@@ -171,6 +171,6 @@ Python の依存はなし。CI で使うものを 3 つ足す（承認が要る�
 - **テストの結果**：
   - Red（テスト 1〜4）：zizmor 14（1.31.1・1.30.1 とも）、actionlint 1（綴りの誤りと shellcheck の SC2086）、hadolint 1（DL3007）、このリポジトリの hadolint 4 件で 1。
   - Green（テスト 5〜8）：`ci.yml` の 3 つの手順の `run:` をそのまま取り出して `bash -e` で実行。このリポジトリでは 3 つとも 0（新しい `ci.yml` 自身も actionlint・zizmor を通る）、悪い見本では actionlint 1・zizmor 14・hadolint 1。除外のコメントの次の 2 つ目の `apt-get install` は DL3008 で失敗（テスト 6）。
-  - テスト 9：API のイメージ・`Dockerfile.dev` のイメージとも `uid=10001(appuser) gid=999(appuser)`（`USER appuser` のときと同じ）。API のイメージで `scripts/smoke_test.py` が通る（`--network none`）。`Dockerfile.dev` の中で pytest 1796 件通過・カバレッジ 99.59%、nbmake 8 件通過。
+  - テスト 9：API のイメージ・`Dockerfile.dev` のイメージとも `uid=10001(appuser) gid=999(appuser)`（`USER appuser` のときと同じ。main の `Dockerfile` からイメージを作って確かめた、2026-10-16。この行は、確かめる前に書いていたのをレビューで見つけて確かめ直した）。API のイメージで `scripts/smoke_test.py` が通る（`--network none`）。`Dockerfile.dev` の中で pytest 1796 件通過・カバレッジ 99.59%、nbmake 8 件通過。
   - テスト 10：ruff・ruff format・mypy（52 ファイル）が通る。
 - **わざと壊して見つけたこと**（作業用フォルダのコピーで 1 か所ずつ）：`USER appuser` に戻す → DL3066 で 1。除外のコメントを消す → DL3008 で 1。除外と `RUN` の間に行を挟む → DL3008 で 1。`Dockerfile.dev` がない → 1。zizmor の対象のパスの誤り → 1。対象のフォルダにワークフローがない → 3。どれも失敗になり、見ないまま通るものはなかった。
