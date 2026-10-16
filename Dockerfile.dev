@@ -6,9 +6,13 @@
 #   docker run --rm -v "${PWD}:/work" cloud-weather-dev uv run --locked pytest --cov=app --cov=ml
 #
 # 依存（pyproject.toml・uv.lock）を変えたら、ビルドし直す。
-FROM python:3.14-slim
+#
+# ベースイメージと uv のイメージは、Dockerfile と同じタグと digest で固定する（Dependabot が一緒に上げる）。
+FROM ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 AS uv
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /bin/
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+
+COPY --from=uv /uv /bin/
 
 # LightGBM が読み込む共有ライブラリ（OpenMP）。slim のイメージには入っていない。
 # 版は固定しない（DL3008 をこの命令だけ除外）。理由は Dockerfile の同じ命令のコメントと同じ。
