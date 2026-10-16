@@ -23,6 +23,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # 来歴・SBOM の attestation（#22）。id-token は Sigstore の証明書をもらう OIDC トークン。
+      # docker run のコンテナには環境変数を渡していないので、スモークテスト・Trivy のコンテナからは使えない。
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,6 +73,18 @@ jobs:
             --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
             --skip-db-update --offline-scan --skip-version-check --disable-telemetry --no-progress
 
+      # 検査に通ったのと同じ tar から SBOM（部品表、SPDX 2.3 の JSON）を作る（#22）。
+      # SBOM を作るだけなら脆弱性のデータベースは要らず、外部と通信しない。作れなければ push しない。
+      - name: SBOM
+        run: |
+          mkdir -p "${RUNNER_TEMP}/sbom"
+          docker run --rm --network none \
+            --volume "${RUNNER_TEMP}/image.tar:/scan/image.tar:ro" \
+            --volume "${RUNNER_TEMP}/sbom:/sbom" \
+            ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --input /scan/image.tar --format spdx-json --output /sbom/sbom.spdx.json \
+            --skip-version-check --disable-telemetry --no-progress
+
       # ここから先は、スモークテストと Trivy の検査が通ったときだけ実行される。
       # Trivy は docker login より前に実行する（ログインの情報が残った Docker で検査のコンテナを動かさない）。
       - name: Log in to ghcr.io
@@ -78,7 +94,9 @@ jobs:
 
       # テストしたイメージにタグを付けて push する（作り直さない）。
       # イメージ名は小文字だけ（持ち主の名前に大文字があるので変換する）。
+      # push した後、レジストリに置かれたイメージの digest を問い合わせて、attest の手順に渡す（#22）。
       - name: Push image
+        id: push
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cloud-weather"
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
@@ -94,6 +112,35 @@ jobs:
             docker tag cloud-weather:cd "${image}:${tag}"
             docker push "${image}:${tag}"
           done
+          digest="$(docker buildx imagetools inspect "${image}:${tags[0]}" --format '{{.Manifest.Digest}}')"
+          if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "pushed image digest is not usable" >&2
+            exit 1
+          fi
+          echo "name=${image}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      # ビルドの来歴と SBOM を、Sigstore で署名してイメージの隣（ghcr.io）に置く（#22）。
+      # 公式の例と同じく、ログインした後・ログアウトの前に実行する（レジストリへの認証のしかたは README に書かれていない）。
+      # push の後に失敗すると、署名のないイメージが push 済みになる（digest はレジストリから取るので、push の前には動かせない）。
+      # そのときは CD を再実行して付け直す。
+      # storage record は組織のリポジトリでしか作れないので作らない。
+      - name: Attest provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/sbom/sbom.spdx.json
+          push-to-registry: true
+          create-storage-record: false
 
       - name: Log out of ghcr.io
         if: always()
