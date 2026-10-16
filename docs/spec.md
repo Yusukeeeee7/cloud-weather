@@ -631,8 +631,30 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - Docker：slim ベースイメージ、非 root ユーザーで実行、不要なファイルは `.dockerignore`。
 - 依存：`pip-audit` を CI で実行、Dependabot を有効化。
 - GitHub Actions：`permissions` は最小限（既定は `contents: read`）、外部 Action はバージョンを固定。
-- シークレット混入対策：GitHub の secret scanning を有効化。
+- シークレット混入対策：GitHub の secret scanning を有効化（実際に有効かどうかは #19 で確認する）。
 - Claude Code：`.claude/settings.json` で `.env` の読み取りを拒否。破壊的操作は行わせない。
+
+### CI/CD でのセキュリティ検査（DevSecOps。#18〜#24。2026-10-16 決定）
+
+作る・動かすの流れ（CI/CD）の途中に、セキュリティの自動の検査を入れる。守る範囲を、自分のコード → 完成したイメージ → 配布したイメージ、の順に広げる。
+
+| # | 検査するもの | 使うもの | 実行する場所 |
+|---|---|---|---|
+| 18 | 自分のコードの危ない書き方（SAST） | ruff の `S` ルール、CodeQL | `ci.yml`、CodeQL のワークフロー |
+| 19 | シークレットのコミット | GitHub の Push protection、gitleaks | GitHub の設定、`ci.yml` |
+| 20 | ワークフローと Dockerfile の書き方 | zizmor、actionlint、hadolint | `ci.yml` |
+| 21 | イメージの中の脆弱性（OS のパッケージを含む） | ベースイメージの digest 固定、Trivy | `Dockerfile`、`ci.yml`、`cd.yml` |
+| 22 | 配布したイメージの出どころ | SBOM、ビルドの来歴（provenance） | `cd.yml` |
+| 23 | 動いている API への攻撃（DAST） | OWASP ZAP の API スキャン | `cd.yml` |
+| 24 | リポジトリ全体の対策の点数 | OpenSSF Scorecard | Scorecard のワークフロー |
+
+共通の決まり：
+
+- ツール・Action を足すときは、計画に理由を書いて承認を得る。Action はほかと同じくコミットの SHA で固定する。
+- ツールの設定・引数・出力の形式は推測で書かない。公式ドキュメントで確かめ、確かめたことを計画に書く。
+- 検査で見つかった既存の指摘は、直すか、理由をコメントに書いて 1 件ずつ除外する。ルールや検査をまとめて外して通さない（テストを弱めないのと同じ考え）。
+- 検査が外部と通信するもの（脆弱性のデータベースの取得など）は、通信先を計画に書く。アプリのコンテナは、これまでどおり外部と通信させない。
+- 検査の結果に、シークレットを出さない。
 
 ## 12. テスト方針（TDD）
 
@@ -651,6 +673,8 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | `ci.yml` | PR | ruff、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
+
+#18〜#24 で、上のワークフローにセキュリティの検査を足す（どこに何を足すかは「11. セキュリティ要件」の表）。CodeQL と Scorecard は、きっかけが違うので別のワークフローにする。表は、それぞれの機能が完了したときに更新する。
 
 ## 14. 機能一覧とマイルストーン
 
@@ -674,7 +698,17 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 16 | 誤差の分析 | 検証の年（2024）で、上限より下の行の誤差を、高さの帯・符号（高すぎ／低すぎ）・都市・季節に分けて出す。分析の関数はテスト付きで `ml/` に置く。結果と、次に試す案（最大 3 つ）を `docs/model-card.md` に書く。モデルとテストの年には触れない | 完了（次に試す案は `docs/model-card.md` 10 節） |
 | 17 | モデルの改善 | #16 で決めた案を、計画で決めた手順で比べる。テストの年（2025）は最後に 1 回だけ評価し、成功基準の判定と前のモデルとの比較を `docs/model-card.md` に書く。採る場合は `model_version` を替え、`/cloud-base` のテストが通る | 完了。`two_stage_30` を採り、v2 に替えた。テストの年で 2 都市とも成功基準を満たした（`docs/model-card.md` 11 節） |
 
+| 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する。CodeQL（Python）が PR と main への push で実行され、結果が GitHub の Security タブに出る | 未着手 |
+| 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 未着手 |
+| 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 未着手 |
+| 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 未着手 |
+| 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 未着手 |
+| 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 未着手 |
+| 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 未着手 |
+
 #16・#17 は、#13・#14 より先に進める（2026-10-13 に変更。それまでは「#13・#14 の後」としていた）。決まりは「9. モデルの改善」。
+
+#18〜#24（DevSecOps）は番号の順に進める。#13（Discord 通知）との前後は決めていない。
 
 ## 15. AI駆動開発の記録
 
