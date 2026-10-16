@@ -18,6 +18,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # gitleaks が全履歴を検査するため、すべてのコミットを取得する。
+          fetch-depth: 0
+
+      # シークレットが入っていたら、ほかの手順のログを出す前に止める。
+      # --redact で、見つかった値をログに出さない。外部と通信させない。
+      # docker run のイメージなので、Dependabot はこの行を更新しない（版と digest は手で上げる）。
+      - name: Gitleaks (full history)
+        run: |
+          set -o pipefail
+          # 浅い履歴では古いコミットを見ずに通ってしまうので、先に止める。
+          if [[ "$(git rev-parse --is-shallow-repository)" != "false" ]]; then
+            echo "not a full git history (shallow or not a git repository); gitleaks needs the full history" >&2
+            exit 1
+          fi
+          docker run --rm --network none \
+            --volume "${GITHUB_WORKSPACE}:/repo:ro" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact --no-banner --verbose /repo 2>&1 | tee "${RUNNER_TEMP}/gitleaks.log"
+          # git が失敗しても gitleaks は 0 で終わる（v8.30.1 で確かめた）ので、ERR の行があれば失敗にする。
+          # ログには色の制御文字が付くので、消してから「時刻 ERR」で始まる行を探す。
+          if sed 's/\x1b\[[0-9;]*m//g' "${RUNNER_TEMP}/gitleaks.log" | grep -qE '^[^ ]+ ERR '; then
+            echo "gitleaks reported an error" >&2
+            exit 1
+          fi
 
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
