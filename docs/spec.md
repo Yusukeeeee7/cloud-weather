@@ -673,7 +673,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
+| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
