@@ -145,7 +145,8 @@ def test_baseline_report_has_no_test_year_local_paths_or_secrets() -> None:
         "/Users/",
         "/work",
         "/venv",
-        "/tmp",
+        # 出力に含まれてはいけない文字列。一時ファイルは作らない。
+        "/tmp",  # noqa: S108
         "DISCORD_WEBHOOK",
         "password",
     ):
@@ -264,7 +265,8 @@ def test_reports_have_no_local_paths_or_secrets(path: Path) -> None:
         "/Users/",
         "/work",
         "/venv",
-        "/tmp",
+        # 出力に含まれてはいけない文字列。一時ファイルは作らない。
+        "/tmp",  # noqa: S108
         "DISCORD_WEBHOOK",
         "password",
     ):
@@ -362,7 +364,8 @@ def test_error_analysis_report_has_no_local_paths_or_secrets() -> None:
         "/Users/",
         "/work",
         "/venv",
-        "/tmp",
+        # 出力に含まれてはいけない文字列。一時ファイルは作らない。
+        "/tmp",  # noqa: S108
         "DISCORD_WEBHOOK",
         "password",
     ):
@@ -589,7 +592,8 @@ def test_new_reports_have_no_local_paths_or_secrets() -> None:
             "/Users/",
             "/work",
             "/venv",
-            "/tmp",
+            # 出力に含まれてはいけない文字列。一時ファイルは作らない。
+            "/tmp",  # noqa: S108
             "DISCORD_WEBHOOK",
             "password",
         ):

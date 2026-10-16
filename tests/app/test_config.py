@@ -11,7 +11,7 @@ CACHE_ENV = (
 )
 RETRY_ENV = ("OPEN_METEO_MAX_RETRIES", "OPEN_METEO_RETRY_BACKOFF_S")
 # 実在しない接続先と、秘密ではないダミーのパスワード。値が表示されないことの確認に使う。
-DUMMY_PASSWORD = "dummy-password"
+DUMMY_PASSWORD = "dummy-password"  # noqa: S105
 DUMMY_REDIS_URL = f"redis://:{DUMMY_PASSWORD}@localhost:6379/0"
 
 

@@ -52,7 +52,9 @@ def read_seconds(name: str, default: int) -> int:
 def request(url: str, timeout_s: int) -> tuple[int, str]:
     """ステータスと本文を返す。つながらなければ 0 と空文字。"""
     try:
-        with urllib.request.urlopen(url, timeout=timeout_s) as response:
+        # URL は既定の http://127.0.0.1:8000 か、実行する人が引数で渡したもの。
+        # CD と手元で自分で実行するだけで、外部からの入力は受け取らない。
+        with urllib.request.urlopen(url, timeout=timeout_s) as response:  # noqa: S310
             return response.status, response.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode("utf-8", "replace")

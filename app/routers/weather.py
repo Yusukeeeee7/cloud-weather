@@ -18,8 +18,7 @@ def get_clock() -> Clock:
 
 
 def get_open_meteo_client(request: Request) -> OpenMeteoClient:
-    client = request.app.state.open_meteo
-    assert isinstance(client, OpenMeteoClient)
+    client: OpenMeteoClient = request.app.state.open_meteo
     return client
 
 
