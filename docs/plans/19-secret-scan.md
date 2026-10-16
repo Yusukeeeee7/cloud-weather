@@ -174,3 +174,5 @@ Python の依存はなし。CI で使うものを 1 つ足す（質問 2）：
 - **テスト 7**：ruff・ruff format・mypy（52 ファイル）が通る。Docker（`Dockerfile.dev`）の中で pytest 1796 件通過・カバレッジ 99.59%、nbmake 8 件通過。
 - **リポジトリを public にした**（2026-10-16、人間が実施。実装の途中で知らされた）。質問 1 の A（「private では使えないので、公開するときに有効にする」）は前提がなくなった。public では secret scanning を無料で使えるので、人間がリポジトリの「Secret Protection」と「Push protection」を有効にした。spec の #19 の受け入れ条件は書き直さず、もとのまま満たす。
 - **設定画面の記録**：人間のスクリーンショット 3 枚（リポジトリの Code security の画面 2 枚、プロフィールの Code security の画面 1 枚）をもとに `docs/security-settings.md` に書いた。3 つとも有効（ボタンが「Disable」）。調べたことで「書かれていなかった」とした「Push protection for yourself が private に効くか」は、画面の説明文に「across all public repositories on GitHub」とあった。
+- **テスト 6（PR の CI）**（2026-10-16）：1 回目は、後ろの手順の pip-audit が PyPI への通信の途中で切られて失敗した（`ConnectionResetError: [Errno 104] Connection reset by peer`。暗号化の通信を始める挨拶の途中。脆弱性が見つかったのではない）。この PR は pip-audit の手順と依存に触れていないので、その場かぎりのネットワークの失敗と判断した。手元で同じコマンドを実行すると `No known vulnerabilities found` で通った。人間が「Re-run failed jobs」で再実行し、すべて成功した。
+  - gitleaks の手順は、1 回目も 2 回目も、pip-audit より前にあって成功している。ログの `commits scanned` の数は、人間に見てもらっていない。ただし見張り（浅い履歴・`ERR` の行）があるので、手順の成功は「全履歴があり、git のエラーがなく、何も見つからなかった」ことを意味する。
