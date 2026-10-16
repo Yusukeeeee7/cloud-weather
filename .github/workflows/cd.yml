@@ -49,6 +49,45 @@ jobs:
             --volume "${GITHUB_WORKSPACE}/scripts:/scripts:ro" \
             cloud-weather:cd python /scripts/smoke_test.py
 
+      # 動いている API への攻撃の検査（DAST、#23）。ZAP は API のコンテナのネットワーク（--network none）を
+      # 共有するので、127.0.0.1 の API にしか届かない。トークン・環境変数は渡さない。
+      # ZAP は重さに関係なくすべての警告を WARN（終了コード 2）にするので、0・2 は受け入れ、
+      # High の判定は JSON のレポートを読む scripts/zap_high_alerts.py で行う。1（FAIL）・3（ZAP の失敗）は失敗。
+      # ZAP は定義から URL を取り込めなくても止まらない（ログに件数を出すだけ）ので、
+      # 出力の「Number of Imported URLs: N」の N が少なければ失敗にする（説明書を受け取っただけで通さない）。
+      # 8 は /openapi.json に載っている道の数（docs/dast.md）。道を減らしたら合わせる。
+      # docker run のイメージなので、Dependabot はこの行を更新しない（Trivy と同じ）。
+      # レポートのフォルダは、イメージの zap ユーザーが書けるようにする（runner のユーザーとは別）。
+      # 判定はテストと同じ Python で動かすため、API のイメージの中で外部と通信させずに実行する。
+      - name: DAST (ZAP API scan)
+        run: |
+          min_imported_urls=8
+          mkdir -p "${RUNNER_TEMP}/zap"
+          chmod 777 "${RUNNER_TEMP}/zap"
+          zap_output="${RUNNER_TEMP}/zap-output.txt"
+          zap_status=0
+          docker run --rm --network container:api \
+            --volume "${RUNNER_TEMP}/zap:/zap/wrk:rw" \
+            --volume "${GITHUB_WORKSPACE}/.zap:/zap/config:ro" \
+            ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6 \
+            zap-api-scan.py -t http://127.0.0.1:8000/openapi.json -f openapi \
+            -c /zap/config/api-scan.conf -J zap-report.json -s \
+            > "$zap_output" 2>&1 || zap_status=$?
+          cat "$zap_output"
+          if [[ "$zap_status" != 0 && "$zap_status" != 2 ]]; then
+            echo "ZAP API scan failed with exit code ${zap_status}" >&2
+            exit 1
+          fi
+          imported="$(sed -nE 's/.*Number of Imported URLs: ([0-9]+).*/\1/p' "$zap_output" | tail -n 1)"
+          if [[ -z "$imported" ]] || (( imported < min_imported_urls )); then
+            echo "ZAP imported too few URLs: '${imported}' (expected at least ${min_imported_urls})" >&2
+            exit 1
+          fi
+          docker run --rm --network none \
+            --volume "${GITHUB_WORKSPACE}/scripts:/scripts:ro" \
+            --volume "${RUNNER_TEMP}/zap:/report:ro" \
+            cloud-weather:cd python /scripts/zap_high_alerts.py /report/zap-report.json
+
       - name: Show container logs
         if: failure()
         run: docker logs api

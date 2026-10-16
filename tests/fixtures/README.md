@@ -108,3 +108,14 @@ https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&curr
   fixture を取り直したら `FIXED_NOW` も変える。
 
 出典：[Weather data by Open-Meteo.com](https://open-meteo.com/)（CC BY 4.0）
+
+## DAST（#23）の ZAP のレポート
+
+`scripts/zap_high_alerts.py` のテストに使う。外部 API の応答ではなく、手元で ZAP を実行して得たレポート（取得したまま）。
+High・Medium の警告を含むレポートは、テストの中でこのファイルを写して `riskcode` などを書き換えて作る（ファイルには保存しない）。
+
+| ファイル | 作成日時（UTC） | 作成方法 |
+|---|---|---|
+| `zap/api_scan_2.17.0.json` | 2026-10-16T17:54:21Z | `ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a...` の `zap-api-scan.py -t http://127.0.0.1:8000/openapi.json -f openapi -J`。API は `--network none` で起動したこのブランチのイメージ、ZAP は `--network container:api`（CD と同じ形） |
+
+- `site` は 1 つ（`http://127.0.0.1:8000`）。警告は Low 3 つ・Informational 1 つで、High・Medium はない。
