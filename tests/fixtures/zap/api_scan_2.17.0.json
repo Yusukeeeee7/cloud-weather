@@ -1,0 +1,579 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Fri, 16 Oct 2026 17:54:21",
+	"created": "2026-10-16T17:54:21.104420964Z",
+	"insights":[
+		{
+			"level": "Medium",
+			"reason": "Exceeded High",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "91"
+		},
+		{
+			"level": "Low",
+			"reason": "Warning",
+			"site": "",
+			"key": "insight.log.error",
+			"description": "ZAP errors logged - see the zap.log file for details",
+			"statistic": "13"
+		},
+		{
+			"level": "Low",
+			"reason": "Warning",
+			"site": "",
+			"key": "insight.log.warn",
+			"description": "ZAP warnings logged - see the zap.log file for details",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "",
+			"key": "insight.network.failure",
+			"description": "Percentage of network failures",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "2"
+		},
+		{
+			"level": "Info",
+			"reason": "Exceeded Low",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.code.5xx",
+			"description": "Percentage of responses with status code 5xx",
+			"statistic": "6"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "96"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.endpoint.ctype.text/html",
+			"description": "Percentage of endpoints with content type text/html",
+			"statistic": "3"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "100"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "32"
+		},
+		{
+			"level": "Info",
+			"reason": "Exceeded Low",
+			"site": "http://127.0.0.1:8000",
+			"key": "insight.response.slow",
+			"description": "Percentage of slow responses",
+			"statistic": "5"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://127.0.0.1:8000",
+			"@host": "127.0.0.1",
+			"@port": "8000",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-2",
+					"alert": "A Server Error response code was returned by the server",
+					"name": "A Server Error response code was returned by the server",
+					"riskcode": "1",
+					"confidence": "3",
+					"riskdesc": "Low (High)",
+					"desc": "<p>A response code of 502 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "12",
+							"uri": "http://127.0.0.1:8000/cloud-base",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "4",
+							"uri": "http://127.0.0.1:8000/cloud-base?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "861",
+							"uri": "http://127.0.0.1:8000/cloud-base/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "856",
+							"uri": "http://127.0.0.1:8000/cloud-base/forecast",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/forecast",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://127.0.0.1:8000/cloud-base/forecast?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/forecast (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "857",
+							"uri": "http://127.0.0.1:8000/cloud-base/forecast/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/forecast\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "862",
+							"uri": "http://127.0.0.1:8000/cloud-base/history",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/history",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://127.0.0.1:8000/cloud-base/history?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/history (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "864",
+							"uri": "http://127.0.0.1:8000/cloud-base/history/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/history\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "858",
+							"uri": "http://127.0.0.1:8000/cloud-history",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-history",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "7",
+							"uri": "http://127.0.0.1:8000/cloud-history?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-history (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "859",
+							"uri": "http://127.0.0.1:8000/cloud-history/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-history\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "865",
+							"uri": "http://127.0.0.1:8000/sunshine",
+							"nodeName": "http:\/\/127.0.0.1:8000\/sunshine",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "8",
+							"uri": "http://127.0.0.1:8000/sunshine?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/sunshine (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "867",
+							"uri": "http://127.0.0.1:8000/sunshine/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/sunshine\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "863",
+							"uri": "http://127.0.0.1:8000/weather",
+							"nodeName": "http:\/\/127.0.0.1:8000\/weather",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "3",
+							"uri": "http://127.0.0.1:8000/weather?city=tokyo",
+							"nodeName": "http:\/\/127.0.0.1:8000\/weather (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						},
+						{
+							"id": "868",
+							"uri": "http://127.0.0.1:8000/weather/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/weather\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "502",
+							"otherinfo": ""
+						}
+					],
+					"count": "18",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "17"
+				},
+				{
+					"pluginid": "100001",
+					"alertRef": "100001",
+					"alert": "Unexpected Content-Type was returned",
+					"name": "Unexpected Content-Type was returned",
+					"riskcode": "1",
+					"confidence": "3",
+					"riskdesc": "Low (High)",
+					"desc": "<p>A Content-Type of text/html was returned by the server.</p><p>This is not one of the types expected to be returned by an API.</p><p>Raised by the 'Alert on Unexpected Content Types' script</p>",
+					"instances":[ 
+						{
+							"id": "11",
+							"uri": "http://127.0.0.1:8000",
+							"nodeName": "http:\/\/127.0.0.1:8000",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "854",
+							"uri": "http://127.0.0.1:8000/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						}
+					],
+					"count": "2",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "16"
+				},
+				{
+					"pluginid": "10021",
+					"alertRef": "10021",
+					"alert": "X-Content-Type-Options Header Missing",
+					"name": "X-Content-Type-Options Header Missing",
+					"riskcode": "1",
+					"confidence": "2",
+					"riskdesc": "Low (Medium)",
+					"desc": "<p>The Anti-MIME-Sniffing header X-Content-Type-Options was not set to 'nosniff'. This allows older versions of Internet Explorer and Chrome to perform MIME-sniffing on the response body, potentially causing the response body to be interpreted and displayed as a content type other than the declared content type. Current (early 2014) and legacy versions of Firefox will use the declared content type (if one is set), rather than performing MIME-sniffing.</p>",
+					"instances":[ 
+						{
+							"id": "1",
+							"uri": "http://127.0.0.1:8000/health",
+							"nodeName": "http:\/\/127.0.0.1:8000\/health",
+							"method": "GET",
+							"param": "x-content-type-options",
+							"attack": "",
+							"evidence": "",
+							"otherinfo": "This issue still applies to error type pages (401, 403, 500, etc.) as those pages are often still affected by injection issues, in which case there is still concern for browsers sniffing pages away from their actual content type.\nAt \"High\" threshold this scan rule will not alert on client or server error responses."
+						},
+						{
+							"id": "2",
+							"uri": "http://127.0.0.1:8000/openapi.json",
+							"nodeName": "http:\/\/127.0.0.1:8000\/openapi.json",
+							"method": "GET",
+							"param": "x-content-type-options",
+							"attack": "",
+							"evidence": "",
+							"otherinfo": "This issue still applies to error type pages (401, 403, 500, etc.) as those pages are often still affected by injection issues, in which case there is still concern for browsers sniffing pages away from their actual content type.\nAt \"High\" threshold this scan rule will not alert on client or server error responses."
+						}
+					],
+					"count": "2",
+					"systemic": false,
+					"solution": "<p>Ensure that the application/web server sets the Content-Type header appropriately, and that it sets the X-Content-Type-Options header to 'nosniff' for all web pages.</p><p>If possible, ensure that the end user uses a standards-compliant and modern web browser that does not perform MIME-sniffing at all, or that can be directed by the web application/web server to not perform MIME-sniffing.</p>",
+					"otherinfo": "<p>This issue still applies to error type pages (401, 403, 500, etc.) as those pages are often still affected by injection issues, in which case there is still concern for browsers sniffing pages away from their actual content type.</p><p>At \"High\" threshold this scan rule will not alert on client or server error responses.</p>",
+					"reference": "<p>https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/compatibility/gg622941(v=vs.85)</p><p>https://owasp.org/www-community/Security_Headers</p>",
+					"cweid": "693",
+					"wascid": "15",
+					"sourceid": "3"
+				},
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-1",
+					"alert": "A Client Error response code was returned by the server",
+					"name": "A Client Error response code was returned by the server",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>A response code of 404 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "9",
+							"uri": "http://127.0.0.1:8000/7944615686661974178",
+							"nodeName": "http:\/\/127.0.0.1:8000\/7944615686661974178",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "975",
+							"uri": "http://127.0.0.1:8000/actuator/health",
+							"nodeName": "http:\/\/127.0.0.1:8000\/actuator\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "18",
+							"uri": "http://127.0.0.1:8000/cloud-base?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "10",
+							"uri": "http://127.0.0.1:8000/cloud-base/6249592556154699522",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/6249592556154699522",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "19",
+							"uri": "http://127.0.0.1:8000/cloud-base/forecast?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/forecast (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
+							"uri": "http://127.0.0.1:8000/cloud-base/history?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-base\/history (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "16",
+							"uri": "http://127.0.0.1:8000/cloud-history?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/cloud-history (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "631",
+							"uri": "http://127.0.0.1:8000/computeMetadata/v1/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/computeMetadata\/v1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "0",
+							"uri": "http://127.0.0.1:8000/daylight?city=tokyo&date=",
+							"nodeName": "http:\/\/127.0.0.1:8000\/daylight (city,date)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "628",
+							"uri": "http://127.0.0.1:8000/latest/meta-data/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/latest\/meta-data\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "639",
+							"uri": "http://127.0.0.1:8000/metadata/instance",
+							"nodeName": "http:\/\/127.0.0.1:8000\/metadata\/instance",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "640",
+							"uri": "http://127.0.0.1:8000/metadata/v1",
+							"nodeName": "http:\/\/127.0.0.1:8000\/metadata\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "633",
+							"uri": "http://127.0.0.1:8000/opc/v1/instance/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/opc\/v1\/instance\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "635",
+							"uri": "http://127.0.0.1:8000/opc/v2/instance/",
+							"nodeName": "http:\/\/127.0.0.1:8000\/opc\/v2\/instance\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "641",
+							"uri": "http://127.0.0.1:8000/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/127.0.0.1:8000\/openstack\/latest\/meta_data.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "17",
+							"uri": "http://127.0.0.1:8000/sunshine?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/sunshine (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "14",
+							"uri": "http://127.0.0.1:8000/weather?city=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8000\/weather (city)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						}
+					],
+					"count": "17",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "12"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}
