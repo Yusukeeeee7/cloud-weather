@@ -640,7 +640,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | # | 検査するもの | 使うもの | 実行する場所 |
 |---|---|---|---|
-| 18 | 自分のコードの危ない書き方（SAST） | ruff の `S` ルール、CodeQL | `ci.yml`、CodeQL のワークフロー |
+| 18 | 自分のコードの危ない書き方（SAST） | ruff の `S` ルール | `ci.yml`（いまの ruff の手順） |
 | 19 | シークレットのコミット | GitHub の Push protection、gitleaks | GitHub の設定、`ci.yml` |
 | 20 | ワークフローと Dockerfile の書き方 | zizmor、actionlint、hadolint | `ci.yml` |
 | 21 | イメージの中の脆弱性（OS のパッケージを含む） | ベースイメージの digest 固定、Trivy | `Dockerfile`、`ci.yml`、`cd.yml` |
@@ -648,11 +648,14 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 23 | 動いている API への攻撃（DAST） | OWASP ZAP の API スキャン | `cd.yml` |
 | 24 | リポジトリ全体の対策の点数 | OpenSSF Scorecard | Scorecard のワークフロー |
 
+CodeQL は、private のリポジトリでは有料（GitHub Code Security のライセンスが要る。公式ドキュメント「About code scanning」で確認、2026-10-16。WebFetch の要約で確認し、原文は読んでいない）。#18 からは外し、リポジトリを公開するときに入れる（#18 の計画で決定）。
+
 共通の決まり：
 
 - ツール・Action を足すときは、計画に理由を書いて承認を得る。Action はほかと同じくコミットの SHA で固定する。
 - ツールの設定・引数・出力の形式は推測で書かない。公式ドキュメントで確かめ、確かめたことを計画に書く。
 - 検査で見つかった既存の指摘は、直すか、理由をコメントに書いて 1 件ずつ除外する。ルールや検査をまとめて外して通さない（テストを弱めないのと同じ考え）。
+  - 例外：テストの `assert`（ruff の S101）だけは、`tests/` でまとめて除外する。pytest は `assert` で確かめる仕組みで、テストは `-O`（`assert` が消える）では実行しないため（#18 で決定）。
 - 検査が外部と通信するもの（脆弱性のデータベースの取得など）は、通信先を計画に書く。アプリのコンテナは、これまでどおり外部と通信させない。
 - 検査の結果に、シークレットを出さない。
 
@@ -670,7 +673,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR | ruff、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
+| `ci.yml` | PR | ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
@@ -697,8 +700,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 15 | UI（任意） | 現在の天気・予報・日照・雲底を表示する簡単な画面。過去 24 時間の雲量をスライダーで見られる（`/cloud-history`）。24 時間の予報と過去 24 時間に、各時刻の雲底の予測を出す（`/cloud-base/forecast`・`/cloud-base/history`）。雲があっても日差しが通るかを、日照時間と日射で見られる（`/sunshine`）。どれも 2026-10-14 に追加 | 完了（2026-10-14、手元のブラウザで人間が確認） |
 | 16 | 誤差の分析 | 検証の年（2024）で、上限より下の行の誤差を、高さの帯・符号（高すぎ／低すぎ）・都市・季節に分けて出す。分析の関数はテスト付きで `ml/` に置く。結果と、次に試す案（最大 3 つ）を `docs/model-card.md` に書く。モデルとテストの年には触れない | 完了（次に試す案は `docs/model-card.md` 10 節） |
 | 17 | モデルの改善 | #16 で決めた案を、計画で決めた手順で比べる。テストの年（2025）は最後に 1 回だけ評価し、成功基準の判定と前のモデルとの比較を `docs/model-card.md` に書く。採る場合は `model_version` を替え、`/cloud-base` のテストが通る | 完了。`two_stage_30` を採り、v2 に替えた。テストの年で 2 都市とも成功基準を満たした（`docs/model-card.md` 11 節） |
-
-| 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する。CodeQL（Python）が PR と main への push で実行され、結果が GitHub の Security タブに出る | 未着手 |
+| 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する（テストの `assert` は「11. セキュリティ要件」の例外）。CodeQL は、リポジトリを公開するときに入れる（11 を参照） | 完了（2026-10-16） |
 | 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 未着手 |
 | 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 未着手 |
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 未着手 |
