@@ -38,10 +38,11 @@ CD（`.github/workflows/cd.yml`）は、ghcr.io に push したイメージに 2
    ```
 
 2. ghcr.io にログインする（パッケージが private なので、イメージの digest を調べるのに要る）。
-   パスワードには、`read:packages` の権限を持つトークンを使う。
+   パスワードには、`read:packages` の権限を持つトークンを使う。gh のトークンに権限を足して渡す形で動いた（2026-10-16）。
 
    ```bash
-   docker login ghcr.io --username Yusukeeeee7
+   gh auth refresh -h github.com -s read:packages
+   gh auth token | docker login ghcr.io --username Yusukeeeee7 --password-stdin
    ```
 
 3. 来歴を検証する（タグは CD が付けた `sha-<短いSHA>` か `latest`）。
@@ -63,15 +64,25 @@ CD（`.github/workflows/cd.yml`）は、ghcr.io に push したイメージに 2
    gh attestation verify oci://ghcr.io/yusukeeeee7/cloud-weather:sha-<短いSHA> -R Yusukeeeee7/does-not-exist
    ```
 
-- 3・4 は GitHub Docs の例（イメージの来歴、ファイルの SBOM）に沿った形。4 のように、イメージで `--predicate-type` を使う例は公式のページにない。1 回目の検証で動くかを確かめ、結果を下に書く。
+- 3・4 は GitHub Docs の例（イメージの来歴、ファイルの SBOM）に沿った形。4 のように、イメージで `--predicate-type` を使う例は公式のページにないが、1 回目の検証で動いた（下の記録）。
+- Git Bash（Claude Code の Bash ツール）から実行したときは、成功しても何も表示されなかった（終了コード 0 だけ）。中身を見るには `--format json` を付け、`--jq` で取り出す。例：
+  `--format json --jq '.[] | .verificationResult.statement.predicateType'`
+- `gh` は `C:\Program Files\GitHub CLI\gh.exe` にある。プロジェクトの `.venv\Scripts\gh` は PyPI の別のパッケージで、GitHub CLI ではない。PATH で先に見つかるときはフルパスで呼ぶ。
 - Git Bash で実行するときに引数が書き換えられて失敗したら、先頭に `MSYS_NO_PATHCONV=1` を付ける（#21 の cosign で起きた）。
 
 ## 検証の記録
 
 人間が 1 回検証した結果を書く。
 
-| 日付 | イメージ（タグと digest） | 手順 | 結果 |
-|---|---|---|---|
-| （未実施） | | 3 来歴 | |
-| （未実施） | | 4 SBOM | |
-| （未実施） | | 5 別のリポジトリ（見つからず失敗するはず） | |
+2026-10-16：PR #44 のマージ後の CD（run 38925065692、すべての手順が成功）が push したイメージ。
+人間がログイン（`gh auth login`、`read:packages` の追加、`docker login ghcr.io`）を行い、同じ PC で AI（Claude Code）が手順 3〜5 を実行した。
+
+- イメージ：`ghcr.io/yusukeeeee7/cloud-weather:sha-e22929f`
+- digest：`sha256:56f826a5a0ba1f0f0731ae9efeab3f487d1a1cc27e1fc669f7987be098739056`（CD の `docker push` の出力と同じ）
+- Rekor：来歴 `logIndex=3281420984`、SBOM `logIndex=3281422117`（CD のログより）
+
+| 手順 | 終了コード | 結果 |
+|---|---|---|
+| 3 来歴 | 0（成功） | 形式 `https://slsa.dev/provenance/v1`。署名したワークフロー `https://github.com/Yusukeeeee7/cloud-weather/.github/workflows/cd.yml@refs/heads/main`。元のコミット `e22929f565508761d4a05b785a0b7bc1cea10e82`（PR #44 のマージ） |
+| 4 SBOM | 0（成功） | 形式 `https://spdx.dev/Document/v2.3`。`SPDX-2.3`、部品 120 個。`fastapi` あり、`pip` なし |
+| 5 別のリポジトリ（`-R Yusukeeeee7/does-not-exist`） | 1（失敗。予想どおり） | `HTTP 404: Not Found`（GitHub の API で attestation が見つからない） |
