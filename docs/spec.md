@@ -673,7 +673,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
+| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
@@ -702,7 +702,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 17 | モデルの改善 | #16 で決めた案を、計画で決めた手順で比べる。テストの年（2025）は最後に 1 回だけ評価し、成功基準の判定と前のモデルとの比較を `docs/model-card.md` に書く。採る場合は `model_version` を替え、`/cloud-base` のテストが通る | 完了。`two_stage_30` を採り、v2 に替えた。テストの年で 2 都市とも成功基準を満たした（`docs/model-card.md` 11 節） |
 | 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する（テストの `assert` は「11. セキュリティ要件」の例外）。CodeQL は、リポジトリを公開するときに入れる（11 を参照） | 完了（2026-10-16） |
 | 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 完了（2026-10-16。設定は `docs/security-settings.md`。PR の CI で gitleaks の手順が成功） |
-| 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 未着手 |
+| 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 完了（2026-10-16。PR の CI で 3 つの手順が成功） |
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 未着手 |
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 未着手 |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 未着手 |

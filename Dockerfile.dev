@@ -11,6 +11,8 @@ FROM python:3.14-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /bin/
 
 # LightGBM が読み込む共有ライブラリ（OpenMP）。slim のイメージには入っていない。
+# 版は固定しない（DL3008 をこの命令だけ除外）。理由は Dockerfile の同じ命令のコメントと同じ。
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
@@ -26,6 +28,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-install-project
 
 RUN useradd --system --create-home --uid 10001 appuser && chown -R appuser /venv
-USER appuser
+# 上で作った appuser の uid。名前でなく数字で指定する（DL3066）。
+USER 10001
 
 WORKDIR /work
