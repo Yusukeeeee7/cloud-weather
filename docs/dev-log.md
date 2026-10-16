@@ -1912,3 +1912,119 @@ AI の誤りではないが記録しておくこと：
 - 人間の学び：（要記入）
 
 ---
+
+### 2026-10-16 #20 ワークフロー・Dockerfile の検査（Issue #39 / PR #（要記入））
+
+**指示したこと（プロンプトの要約）**
+- `/plan-feature 20`（Issue #39「ワークフローと Dockerfile の書き方」）。計画の質問 6 件に「おすすめで進めてください」。
+- `/implement-feature 20 39`。Red の報告で AI が「zizmor の最新版は前日に出たばかり。1 つ前の 1.30.1 にするか」を聞き、人間が「おすすめで、実装へ進んで」。
+- spec の変更案 3 点に「おすすめで進めてください」。
+- `/review` の指摘に「おすすめで進めてください」。AI が計画に 1 行足して push し、PR の URL と本文を渡した（PR は人間が作成）。
+- 「PR の CI がすべて成功しました」。AI が #20 を「完了」にして push した。`/dev-log`。
+
+**渡したコンテキスト**
+- CLAUDE.md / 使った skill：CLAUDE.md（自動読み込み）、メモリ 4 件（シェル環境、「ブランチを変えない」、「たとえで説明する」、「日本語で返答する」）、`/plan-feature`、`/implement-feature`、`/review`、`/dev-log`
+- 明示したファイル：なし（機能番号と Issue の題名だけ）。AI が自分で読んだもの：
+  - `docs/spec.md`（11・13・14 章）、`docs/plans/19-secret-scan.md`
+  - `.github/workflows/ci.yml`、`.github/workflows/cd.yml`、`.github/dependabot.yml`、`Dockerfile`、`Dockerfile.dev`
+- 公式ドキュメント（どれも WebFetch の要約で、原文は読んでいない）：
+  - zizmor の Usage・Installation（`docs.zizmor.sh`）
+  - actionlint の `docs/usage.md`・`docs/config.md`
+  - hadolint の README
+- 版は GitHub の Releases の API、digest は `docker buildx imagetools inspect` でレジストリから取得した。
+- 計画を書く前に、3 つのツールの `:latest` を `--network none` で手元のファイルにかけ、既存の指摘を数えた（hadolint 4 件、actionlint・zizmor 0 件）。計画の質問は、この結果をもとに作った。
+- 足りなかった・余計だった情報：
+  - Issue #39 の本文は読めていない（`gh` がない）。
+  - 要約のページでは分からなかったこと：zizmor-action の有無と権限、actionlint の `# shellcheck disable=` が効くか、hadolint の終了コードの数値、actionlint・hadolint が通信するか（通信は `--network none` で動くことを実行して確かめた）。
+  - 余計だった情報：（要記入）
+
+**TDD**
+- 先に書いたテスト：3 つのツールは pytest の対象にならないので、計画で「ツールを実行して確かめる」11 の確認を決めた（#19 と同じやり方）。
+  1. zizmor：PR のタイトルをそのまま `run:` に書いた見本
+  2. actionlint：項目名の綴りの誤りと、引用符のない `$HOME` の見本
+  3. hadolint：`FROM python:latest` の見本
+  4. このリポジトリの Dockerfile（直す前）
+  5. 直したあと
+  6. 除外のコメントが 1 命令にしか効かないこと
+  7. このリポジトリのワークフロー
+  8. `ci.yml` の手順をそのまま取り出して `bash -e` で実行
+  9. uid と、これまでのテスト
+  10. ruff・mypy
+  11. PR の CI
+- Red を確認したか：はい。zizmor 14（`template-injection`、high）、actionlint 1（綴りの誤りと shellcheck の SC2086）、hadolint 1（DL3007）、このリポジトリの Dockerfile は 4 件（DL3008 が 2 件、DL3066 が 2 件）で 1。
+  - 確認 2 の 1 回目は、見本が git のリポジトリでなかったため、actionlint が `no project was found`（終了コード 3）で終わった。`git init` してから実行し直した。
+  - zizmor は 1.31.1 で Red を確かめたあと、人間の回答で 1.30.1 に替え、確認 1・7 を同じ結果で確かめ直した。
+- 最初の実装でテストが通ったか：はい（修正回数：0）。
+  - `USER 10001` と、DL3008 を 1 命令ずつ除外したあとの hadolint は 0。
+  - 確認 8：このリポジトリでは 3 つとも 0（新しい `ci.yml` 自身も actionlint・zizmor を通る）。悪い見本では actionlint 1・zizmor 14・hadolint 1。
+- わざと壊す確認（実装手順 7。作業用フォルダのコピーで 1 か所ずつ）：
+
+  | 壊したところ | 結果 |
+  |---|---|
+  | `USER appuser` に戻す | DL3066 で 1 |
+  | 除外のコメントを消す | DL3008 で 1 |
+  | 除外のコメントと `RUN` の間に行を挟む | DL3008 で 1（除外は直後の命令にしか効かない） |
+  | `Dockerfile.dev` がない | 1 |
+  | zizmor の対象のパスの誤り | 1 |
+  | zizmor の対象のフォルダにワークフローがない | 3 |
+
+  - どれも失敗になった。#19 の gitleaks のような「検査できないのに 0 で通る」ものはなかった。
+- 確認 9：API のイメージ・`Dockerfile.dev` のイメージとも `uid=10001(appuser) gid=999(appuser)`。main の `Dockerfile` から作ったイメージも同じ。スモークテストが通った（`--network none`）。Docker（`Dockerfile.dev`）の中で pytest 1,796 件成功（カバレッジ 99.59%）、nbmake 8 件成功。
+- 確認 10：ruff・format・mypy（52 ファイル）が通った。
+- 確認 11（CI）：PR の CI がすべて成功した（人間が確認）。
+
+**AIの誤り・ハルシネーション**
+| 内容 | 気づいた仕組み | 修正 | 再発防止 |
+|---|---|---|---|
+| **`rm -rf` を含むコマンドを、また実行しようとした**（作業用フォルダのコピーを作り直すつもり）。**#18・#19 に続いて 3 回目**。#19 の dev-log で「片付けでも `rm -rf` は使わない」と書き、CLAUDE.md・設定への反映を変更案として出していたが、未反映だった | 実行が拒否された | 新しいフォルダ名を使い、`rm -rf` なしで実行し直した | dev-log に書くだけでは防げていない。下の変更案（`.claude/settings.json` の `deny`）を採るかを人間が決める |
+| **確かめる前に「変わらない」と書いた**。計画の「実装時の変更」に「gid は `USER appuser` のときと同じ」と書いたが、変える前の gid は見ていなかった | `/review` で自分の書いたものを読み直して気づいた | main の `Dockerfile` からイメージを作って確かめた（同じ 999 だった）。計画のその行に、確かめ直したことを書いた | 「前と同じ」と書くときは、前の値も実行して見てから書く |
+| **イメージのタグの名前を推測した**。zizmor の ghcr.io のタグを、GitHub の Releases と同じ `v1.31.1` と思い込んで問い合わせた | `not found` が返った | `1.31.1`（`v` なし）で取得した。hadolint は `v2.15.1` で `v` が付く | タグはツールごとに違う。レジストリで確かめてから書く（今回は書く前に問い合わせたので、ファイルには誤りが入っていない） |
+| **出どころを確かめていない理由をコメントに書いた**。`Dockerfile` の「Debian は古い版を消すので、固定するとビルドが壊れる」は、計画で承認された理由だが、Debian の公式ドキュメントは読んでいない | `/review` で 🟡 として自分で挙げた | 人間の回答（おすすめ）で、このままにした | 根拠を残すなら、人間に Debian の公式ドキュメントを確かめてもらう |
+
+- 人間が気づいた誤りで、会話に出ていないもの：（要記入）
+
+**セキュリティ上の確認**
+- この機能そのものが、ワークフローと Dockerfile の危ない書き方を見つける検査を足すもの。
+- `ci.yml`：
+  - 権限は `contents: read` のまま。外部 Action の追加はない。
+  - 3 つのツールは公式の Docker イメージを版と digest で固定した（actionlint `1.7.12`、zizmor `1.30.1`、hadolint `v2.15.1`）。
+  - zizmor は、出たばかりの 1.31.x（前日に公開）を避けて 1.30.1（2026-09-09 公開）にした。
+  - `--network none` で外部と通信させない。リポジトリは読み取り専用でマウントした。zizmor は `--offline` で、トークンを渡していない。
+- `Dockerfile`・`Dockerfile.dev`：非 root（uid 10001）のまま。DL3008 は、ファイル全体・設定ファイルではなく、1 命令ずつ理由を書いて除外した。
+- レビューで 🟢 として挙げたこと：3 つのツールには設定ファイルがあり（`.hadolint.yaml`、`.github/actionlint.yaml`、`zizmor.yml`）、リポジトリに足されると検査が黙って弱くなりうる。zizmor・actionlint がどこの設定ファイルを自動で読むかは確かめていない。
+- 依存パッケージの追加はない（Python）。CI で使うイメージを 3 つ足した（計画で承認済み）。Dependabot はこれらのイメージを更新しない（`ci.yml` のコメントに書いた）。
+- 外部通信：
+  - アプリから：0 回（テストからも 0 回）。
+  - 開発時の公式ドキュメント：WebFetch 5 回（上の「渡したコンテキスト」）。
+  - 開発時のそれ以外：
+    - GitHub の Releases の API 4 回
+    - `docker buildx imagetools inspect` 6 回（ghcr.io・Docker Hub）
+    - `docker pull`：3 つのツールの `:latest`、`ghcr.io/hadolint/hadolint` の版、zizmor `1.30.1`
+    - `docker build` 3 回（API のイメージ 2 回、`Dockerfile.dev` 1 回。中で apt と PyPI に通信したかは、キャッシュによるので数えていない）
+    - `git push` 3 回（この dev-log の push を含めると 4 回）
+- 破壊的な操作（force push、履歴の書き換え、ブランチ削除）はしていない。`rm -rf` は実行しようとして拒否された（上の表）。
+- コミットは、ファイルを名前で指定して add した。
+
+**コスト**
+- Claude 利用量：（要記入）
+- GitHub Actions の実行回数・時間：（要記入）（PR の CI：最初の push と、「完了」のコミットの push の分）
+- 外部API呼び出し：0 回。
+- 開発時のその他の通信：上の「外部通信」のとおり。
+
+**学び・CLAUDE.md / skills への反映**
+- 計画の前にツールを実際にかけて、既存の指摘の数を見てから質問を作った。おすすめを付ける前に影響を数える（`plan-feature` の手順 2）が、そのまま使えた。
+- わざと壊す確認では、#19 のような素通り（0 で終わる）は見つからなかった。ツールによって違うので、毎回確かめる。
+- 出たばかりの版を避けるという考えは、Dependabot の cooldown（別の Issue の候補）と同じ。手で版を選ぶときにも使える。
+- 変更案（未反映。採用するかは人間が決める）：
+  - **`.claude/settings.json`**：`deny` に `Bash(rm -rf:*)` を加える。**3 回目なので、dev-log に書くだけでは防げないことがはっきりした**。CLAUDE.md の「破壊的な操作」の行に「作業用フォルダ（scratchpad）でも」を加える案も、#19 から残っている。
+  - `implement-feature`：手順 8 に「『前と同じ』『変わらない』と書くときは、変える前の値も実行して確かめてから書く」を加える。
+  - `implement-feature`：手順 7 の「壊す」に、ツールの検査なら「検査の対象が見つからない・ない」場合も入れる（今回は入れて確かめた。#19 の素通りの再発防止）。
+- 申し送り：
+  - **`dependabot.yml` の cooldown**：zizmor を `.github/` 全体にかけると `dependabot-cooldown`（medium）が 3 件出る。出たばかりの版の更新を待つ設定。別の Issue の候補。
+  - **zizmor の厳しい設定**：`auditor` にすると 3 件（`cd.yml` の `packages: write` に説明のコメントがない、ジョブに `name:` がない 2 件）。今回は対象外。
+  - **zizmor の online の監査**（Action の既知の脆弱性など）は動かしていない。必要になったら、トークンを渡すかを含めて別の Issue で決める。
+  - **手で上げる版**：uv、gitleaks に、actionlint・zizmor・hadolint が加わった（どれも Dependabot が更新しない）。#21 のときにまとめて見直す。
+  - 作業用フォルダ（scratchpad）の `t20` に、悪い見本、`ci.yml` から取り出した手順のスクリプト、壊す確認のコピー（`break1`）が残っている。手元には確認用のイメージ（`cloud-weather:t20`、`cloud-weather:main-check`）も残っている。
+- 人間の学び：（要記入）
+
+---
