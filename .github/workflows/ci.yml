@@ -102,3 +102,28 @@ jobs:
 
       - name: Docker build
         run: docker build --tag cloud-weather:ci .
+
+      # イメージの中の脆弱性の検査（#21）。修正版のある HIGH・CRITICAL が 1 件でもあれば失敗する。
+      # 公式のイメージを版と digest で固定する（trivy-action は 2026 年 3 月にタグを付け替えられたので使わない）。
+      # docker run のイメージなので、Dependabot はこれらの行を更新しない（版と digest は手で上げる）。
+      # 脆弱性のデータベースだけは、この手順で取得する（mirror.gcr.io、取れなければ ghcr.io）。
+      - name: Trivy DB
+        run: |
+          docker run --rm \
+            --volume "${RUNNER_TEMP}/trivy-cache:/root/.cache" \
+            ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --download-db-only --skip-version-check --disable-telemetry --no-progress
+
+      # 検査は外部と通信させない。Docker のソケットは渡さず、イメージを tar にして読み取り専用で渡す。
+      # --exit-code 1 がないと、指摘があっても 0 で終わる（#21 で確かめた）。
+      # データベースがないときは --skip-db-update で失敗する（素通りしない。#21 で確かめた）。
+      - name: Trivy (image)
+        run: |
+          docker save cloud-weather:ci --output "${RUNNER_TEMP}/image.tar"
+          docker run --rm --network none \
+            --volume "${RUNNER_TEMP}/image.tar:/scan/image.tar:ro" \
+            --volume "${RUNNER_TEMP}/trivy-cache:/root/.cache" \
+            ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --input /scan/image.tar --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-db-update --offline-scan --skip-version-check --disable-telemetry --no-progress

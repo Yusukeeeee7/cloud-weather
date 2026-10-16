@@ -49,7 +49,28 @@ jobs:
         if: failure()
         run: docker logs api
 
-      # ここから先は、スモークテストが通ったときだけ実行される。
+      # イメージの中の脆弱性の検査（#21）。ci.yml の同じ名前の手順と同じ（イメージの名前だけ違う）。
+      # 修正版のある HIGH・CRITICAL が 1 件でもあれば失敗し、push しない。
+      - name: Trivy DB
+        run: |
+          docker run --rm \
+            --volume "${RUNNER_TEMP}/trivy-cache:/root/.cache" \
+            ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --download-db-only --skip-version-check --disable-telemetry --no-progress
+
+      - name: Trivy (image)
+        run: |
+          docker save cloud-weather:cd --output "${RUNNER_TEMP}/image.tar"
+          docker run --rm --network none \
+            --volume "${RUNNER_TEMP}/image.tar:/scan/image.tar:ro" \
+            --volume "${RUNNER_TEMP}/trivy-cache:/root/.cache" \
+            ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --input /scan/image.tar --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-db-update --offline-scan --skip-version-check --disable-telemetry --no-progress
+
+      # ここから先は、スモークテストと Trivy の検査が通ったときだけ実行される。
+      # Trivy は docker login より前に実行する（ログインの情報が残った Docker で検査のコンテナを動かさない）。
       - name: Log in to ghcr.io
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -628,7 +628,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - シークレットは環境変数と GitHub Secrets のみ。`.env` は `.gitignore`、`.env.example` を用意。
 - 入力検証：city は許可リスト（Enum）、その他パラメータは型と範囲を検証。
 - SSRF 対策：ユーザー入力から URL を組み立てない。
-- Docker：slim ベースイメージ、非 root ユーザーで実行、不要なファイルは `.dockerignore`。
+- Docker：slim ベースイメージ、非 root ユーザーで実行、不要なファイルは `.dockerignore`。ベースイメージと uv のイメージはタグと digest で固定し、Dependabot が更新する（Dependabot は `FROM` の行しか読まないので、uv も `FROM` の段にする）。API のイメージからはシステムの pip を消す（使わず、中の部品に脆弱性が見つかったため。#21）。
 - 依存：`pip-audit` を CI で実行、Dependabot を有効化。
 - GitHub Actions：`permissions` は最小限（既定は `contents: read`）、外部 Action はバージョンを固定。
 - シークレット混入対策：GitHub の Secret Protection（secret scanning）と Push protection を有効にした（2026-10-16、#19。リポジトリは public。状態の記録は `docs/security-settings.md`）。CI で gitleaks が全履歴を検査する。
@@ -673,8 +673,8 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 
 | ワークフロー | きっかけ | 内容 |
 |---|---|---|
-| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build |
-| `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
+| `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build → Trivy（#21。イメージを tar にして `--network none` で検査し、修正版のある HIGH・CRITICAL があれば失敗。検査の手順そのものは外部と通信しない。通信するのは、イメージの取得と、その前の手順での脆弱性のデータベースの取得） |
+| `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ Trivy（#21。`ci.yml` と同じ。失敗したら push しない）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定） |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
 #18〜#24 で、上のワークフローにセキュリティの検査を足す（どこに何を足すかは「11. セキュリティ要件」の表）。CodeQL と Scorecard は、きっかけが違うので別のワークフローにする。表は、それぞれの機能が完了したときに更新する。
@@ -703,7 +703,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する（テストの `assert` は「11. セキュリティ要件」の例外）。CodeQL は、リポジトリを公開するときに入れる（11 を参照） | 完了（2026-10-16） |
 | 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 完了（2026-10-16。設定は `docs/security-settings.md`。PR の CI で gitleaks の手順が成功） |
 | 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 完了（2026-10-16。PR の CI で 3 つの手順が成功） |
-| 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 未着手 |
+| 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 実装済み（PR の CI と、main へのマージ後の CD の実行で確認） |
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 未着手 |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 未着手 |
 | 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 未着手 |
