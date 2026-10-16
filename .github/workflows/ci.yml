@@ -43,6 +43,35 @@ jobs:
             exit 1
           fi
 
+      # ワークフローと Dockerfile の書き方の検査（#20）。依存のインストールが要らず速いので、前に置く。
+      # どれも公式のイメージを版と digest で固定し、外部と通信させず、リポジトリを読み取り専用で載せる。
+      # docker run のイメージなので、Dependabot はこれらの行を更新しない（版と digest は手で上げる）。
+      # actionlint は git のリポジトリの中でワークフローを探す（見つからないと終了コード 3）。
+      # shellcheck もイメージに入っていて、run: のスクリプトも検査する。
+      - name: Actionlint (workflows)
+        run: |
+          docker run --rm --network none \
+            --volume "${GITHUB_WORKSPACE}:/repo:ro" --workdir /repo \
+            rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+      # トークンを渡さず --offline で動かす（GitHub の API を使う監査は動かない）。
+      # 指摘があると終了コード 11〜14 で失敗する。
+      # 版は、出たばかりの 1.31.x を避けて 1.30.1（2026-09-09 公開）にした（#20）。
+      - name: Zizmor (workflows)
+        run: |
+          docker run --rm --network none \
+            --volume "${GITHUB_WORKSPACE}:/repo:ro" \
+            ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101 \
+            --offline /repo/.github/workflows
+
+      # 既定の --failure-threshold（info）のまま、info 以上の指摘で失敗する。
+      - name: Hadolint (Dockerfiles)
+        run: |
+          docker run --rm --network none \
+            --volume "${GITHUB_WORKSPACE}:/repo:ro" --workdir /repo \
+            ghcr.io/hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
+            hadolint Dockerfile Dockerfile.dev
+
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Dockerfile の uv のバージョンと合わせる（Dependabot はこの行を更新しない）。
