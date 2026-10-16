@@ -705,7 +705,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 完了（2026-10-16。設定は `docs/security-settings.md`。PR の CI で gitleaks の手順が成功） |
 | 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 完了（2026-10-16。PR の CI で 3 つの手順が成功） |
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 実装済み（PR の CI と、main へのマージ後の CD の実行で確認） |
-| 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 実装済み（未確認：main へのマージ後の CD の実行と、人間の手元からの検証で確かめる。`docs/provenance.md`） |
+| 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 完了（2026-10-16。main へのマージ後の CD で来歴と SBOM が付き、手元からの検証が成功。記録は `docs/provenance.md`） |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 未着手 |
 | 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 未着手 |
 

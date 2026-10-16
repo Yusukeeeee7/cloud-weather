@@ -175,6 +175,7 @@ Python の依存はなし。CI/CD と手元で使うものを足す（承認が�
 | 4 | actionlint 終了コード 0。zizmor「No findings」（3 suppressed は #20 と同じ） |
 | 5 | SHA は v4.2.2 のタグのコミット（上のとおり） |
 | — | ruff・ruff format・mypy が通る。pytest 1796 件が通る（カバレッジ 99.59%。Python は変えていない） |
-| 6〜9 | main へのマージ後の CD と、手元の検証は人間が確認する |
+| 6 | PR #44 のマージ後の CD（run 38925065692）がすべて成功。push の出力の digest と attestation の digest が同じ（リスク 2 は問題なし）。`create-storage-record: false` で動いた（リスク 3） |
+| 7〜9 | 2026-10-16、人間がログインした PC で AI が実行。7・8 は成功（8 はイメージでも `--predicate-type` が使えた。リスク 5）、9 は 404 で失敗（予想どおり）。詳細は `docs/provenance.md` の「検証の記録」 |
 
 - わざと壊す確認（写した `cd.yml` で 1 か所ずつ。リポジトリのファイルは変えていない）：digest の確認をなくす → 3 の 5 件で検出。`--format cyclonedx` にする → 1 で検出。`name=` の出力をなくす → 3 で検出。正規表現の末尾の `$` をなくす → 「後ろに余計な文字」で検出。
