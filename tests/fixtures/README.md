@@ -48,7 +48,7 @@ https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperatu
 
 - `hourly` は 168 行で null はない。東京の先頭は 2026-10-12T15:00Z（現地の 10-13 の 0 時）、ベルリンは 2026-10-12T22:00Z。
 - `tests/conftest.py` の `CLOUD_BASE_NOW` を取得時刻に合わせている。取り直したら変える。
-- 東京の先頭の行（2026-10-12T15:00Z）は、上の fixture の取得時刻（`FIXED_NOW`）の正時と同じ。
+- 東京の先頭の行（2026-10-12T15:00Z）は、上の古い fixture の取得時刻（`LEGACY_NOW`。#25 の追加の前は `FIXED_NOW`）の正時と同じ。
   「4 項目のない保存値があるときに呼び直す」テストがこれに頼っているので、取り直すときは気をつける。
 
 ## 過去 24 時間の雲量（#15 UI）の入力
@@ -115,18 +115,19 @@ https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperatu
 
 ## 2 種類ある理由
 
-- `forecast_<city>.json`：アプリが実際に受け取る形（時刻が UNIX 秒）。
-- `forecast_<city>_iso8601.json`：同じ時刻に、時刻形式だけ変えて取得したもの。`daily.time` に
+- `forecast_<city>_wind.json`（いまの `/weather` のテスト）・`forecast_<city>.json`（#12 より前の形）：アプリが実際に受け取る形（時刻が UNIX 秒）。
+- `forecast_<city>_wind_iso8601.json`・`forecast_<city>_iso8601.json`：それぞれ同じ時刻に、時刻形式だけ変えて取得したもの。`daily.time` に
   Open-Meteo が区切った **現地の日付** が文字列で入っているので、日付の期待値として使う。
-  時刻以外の値は 2 つのファイルで一致している。
+  時刻以外の値は 2 つのファイルで一致している（`_wind` の組は 2026-10-19 に `current`・`hourly`・`daily` を比べて確かめた）。
 
 ## 取得した時刻について
 
-- 東京は、**現地の日付（10-13）が UTC の日付（10-12）より進んでいる時刻** に取得している。
+- 東京は、**現地の日付が UTC の日付より進んでいる時刻** に取得している。
   「日付を UTC ではなく現地で区切る」ことを確かめるため。
-- ベルリンは同じ時刻（現地 17:02）で、現地と UTC の日付は同じ（10-12）。
-- `hourly` の 24 件は時計に依存するため、`tests/conftest.py` の `FIXED_NOW` を取得時刻に合わせている。
-  fixture を取り直したら `FIXED_NOW` も変える。
+  `_wind` の組は現地 10-20 03:25 ごろ（UTC 10-19）、古い組は現地 10-13（UTC 10-12）。
+- ベルリンは同じ時刻で、現地と UTC の日付は同じ（`_wind` の組は現地 10-19 20:25 ごろ、古い組は現地 10-12 17:02）。
+- `hourly` の 24 件は時計に依存するため、`tests/conftest.py` の `FIXED_NOW`（`_wind` の組）と `LEGACY_NOW`（古い組）を取得時刻に合わせている。
+  fixture を取り直したら、これらも変える。
 
 出典：[Weather data by Open-Meteo.com](https://open-meteo.com/)（CC BY 4.0）
 

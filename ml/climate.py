@@ -16,7 +16,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from app.cities import CITIES, City
-from app.services.solar import solar_elevation_deg
+from ml.features import solar_elevation_series
 from ml.target import CEILING_CAP_M, target_m
 
 SOURCE = "data/processed/observations.parquet"
@@ -280,22 +280,13 @@ def monthly_beer_days(observations: pd.DataFrame) -> pd.DataFrame:
     return _average_days_per_year(daily, daily["max_temperature_c"] >= MIDSUMMER_DAY_C)
 
 
-def _solar_elevation_deg(observations: pd.DataFrame) -> pd.Series:
-    """その都市・その時刻の太陽の高度（`/daylight` と同じ計算）。"""
-    values = [
-        solar_elevation_deg(CITIES[City(name)].latitude, CITIES[City(name)].longitude, at)
-        for name, at in zip(observations["city"], observations["time"], strict=True)
-    ]
-    return pd.Series(values, index=observations.index, dtype="float64")
-
-
 def monthly_star_nights(observations: pd.DataFrame) -> pd.DataFrame:
     """月ごとの星空日和の夜の数の、年あたりの平均（このサイト独自の目安）。
 
     暗い正時（太陽が −18° より下）のうち、雲量（再解析）が 25 % 未満の時間が半分以上ある夜。
     夜は夕方の現地の日付で数える（正午から次の日の正午まで）。暗くならない夜は数えない。
     """
-    dark = _solar_elevation_deg(observations) < ASTRONOMICAL_DARK_DEG
+    dark = solar_elevation_series(observations) < ASTRONOMICAL_DARK_DEG
     clear = observations["cloud_cover"].astype("float64") < STAR_CLEAR_COVER
     nights = (_local_times(observations) - pd.Timedelta(hours=12)).dt.date
     table = pd.DataFrame(
