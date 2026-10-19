@@ -634,6 +634,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - シークレット混入対策：GitHub の Secret Protection（secret scanning）と Push protection を有効にした（2026-10-16、#19。リポジトリは public。状態の記録は `docs/security-settings.md`）。CI で gitleaks が全履歴を検査する。
 - 配布したイメージの出どころ：CD で push したイメージに、ビルドの来歴と SBOM（SPDX 2.3）の attestation を `actions/attest` で付ける（#22）。GitHub Free・Pro・Team では public のリポジトリでしか使えないので、**リポジトリを private に戻すと CD が失敗する**（Enterprise Cloud が要る）。パッケージは private のままで使える。手元からの検証の手順と記録は `docs/provenance.md`。
 - 動いている API への攻撃の検査（DAST）：CD で、外部と通信できない API のコンテナに OWASP ZAP の API スキャン（`/openapi.json`）をかけ、High の警告があれば push しない（#23）。初回の結果と対応、手元での実行の手順は `docs/dast.md`。
+- リポジトリ全体の対策の点数：OpenSSF Scorecard を週 1 回と main への push で実行し、結果を Security タブ（コードスキャン）と `api.scorecard.dev` に送る（#24）。点が低くても失敗にしない。初回の点数（5.3）、点の低い項目への対応、見つけられないこと（ワークフロー全体の write の権限）は `docs/scorecard.md`。
 - Claude Code：`.claude/settings.json` で `.env` の読み取りを拒否。破壊的操作は行わせない。
 
 ### CI/CD でのセキュリティ検査（DevSecOps。#18〜#24。2026-10-16 決定）
@@ -677,6 +678,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 |---|---|---|
 | `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build → Trivy（#21。イメージを tar にして `--network none` で検査し、修正版のある HIGH・CRITICAL があれば失敗。検査の手順そのものは外部と通信しない。通信するのは、イメージの取得と、その前の手順での脆弱性のデータベースの取得） |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ DAST（#23。OWASP ZAP の API スキャン。ZAP のコンテナは API のコンテナのネットワークを共有し、外部と通信しない。ZAP が取り込んだ URL が 8 未満（`/openapi.json` の道の数）なら失敗。JSON のレポートを `scripts/zap_high_alerts.py` で読み、High が 1 件でもある・レポートが読めない・API の site がなければ失敗し、push しない。記録は `docs/dast.md`）→ Trivy（#21。`ci.yml` と同じ。失敗したら push しない）→ SBOM（#22。同じ tar から Trivy で SPDX 2.3 の JSON を作る。`--network none`。作れなければ push しない）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定。push の後にレジストリの digest を問い合わせ、`sha256:` と 64 桁でなければ失敗）→ 来歴と SBOM の attestation（#22。`actions/attest`。Sigstore で署名し、イメージの隣に置く。ジョブの権限に `id-token: write`・`attestations: write`。push の後の digest の問い合わせや attest が失敗すると、署名のないイメージが push 済みになるので、CD を再実行して付け直す） |
+| `scorecard.yml` | main への push・schedule（毎週土曜 01:30 UTC） | OpenSSF Scorecard（#24。`ossf/scorecard-action` v2.5.0、`publish_results: true`）。SARIF を `github/codeql-action/upload-sarif` で Security タブに送る。トークンは既定の `GITHUB_TOKEN`、ワークフロー全体は `contents: read`、ジョブだけ `security-events: write`・`id-token: write`。点で失敗にはしない |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
 #18〜#24 で、上のワークフローにセキュリティの検査を足す（どこに何を足すかは「11. セキュリティ要件」の表）。CodeQL と Scorecard は、きっかけが違うので別のワークフローにする。表は、それぞれの機能が完了したときに更新する。
@@ -708,7 +710,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 実装済み（PR の CI と、main へのマージ後の CD の実行で確認） |
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 完了（2026-10-16。main へのマージ後の CD で来歴と SBOM が付き、手元からの検証が成功。記録は `docs/provenance.md`） |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 完了（2026-10-17。main へのマージ後の CD（run 38974879281）で DAST の手順が成功し、push された。取り込んだ URL 11、High 0 件。記録は `docs/dast.md`） |
-| 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 未着手 |
+| 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 実装済み（2026-10-19。main への push の実行（run 39252804563）が成功し、Security タブに結果が出た。初回 5.3。記録は `docs/scorecard.md`。週 1 回の実行は 2026-10-24 以降に確認） |
 
 #16・#17 は、#13・#14 より先に進める（2026-10-13 に変更。それまでは「#13・#14 の後」としていた）。決まりは「9. モデルの改善」。
 
