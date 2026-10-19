@@ -1,0 +1,49 @@
+name: Scorecard
+
+# リポジトリ全体の対策の点数（OpenSSF Scorecard、#24）。結果は Security タブ（コードスキャン）に出る。
+# ci.yml・cd.yml とはきっかけが違うので、別のワークフローにする（spec「13. CI/CD」）。
+# publish_results: true のときは、最上位に env・defaults・write の権限を書けない。
+# ジョブにも env・defaults・container・services を書けず、使える Action も決まっている（scorecard-action の README）。
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # 毎週土曜 01:30 UTC（公式の例と同じ）。
+    - cron: "30 1 * * 6"
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # ジョブで指定すると、書かなかった権限は none になる。contents も書く。
+    permissions:
+      contents: read
+      # SARIF を Security タブ（コードスキャン）に送る。
+      security-events: write
+      # publish_results で api.scorecard.dev に結果を送るときの OIDC トークン。
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # トークンは既定の GITHUB_TOKEN（PAT は使わない）。
+      - name: Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+          # 送信が断られたら失敗にする。README の制限によれば、ワークフロー全体に write の権限を書くと断られるはず（実際に断られるかは未確認）。
+          # CI の zizmor は、その権限を既定では見つけない。
+          # 通信のエラー・408・429・5xx は再試行し、警告だけになる（action.yaml の説明）。
+          fail_on_publish_error: true
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: results.sarif
