@@ -6,6 +6,8 @@
 値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の再解析を使う。
 """
 
+import math
+import numbers
 from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -120,7 +122,7 @@ def yearly_precipitation_mm(observations: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
 
 
-def monthly_temperature_c(observations: pd.DataFrame, source: str) -> pd.DataFrame:
+def monthly_temperature_c(observations: pd.DataFrame, source: TemperatureSource) -> pd.DataFrame:
     """月ごとの平均気温。`source` は `metar`（実測）か `reanalysis`（再解析）。欠けた行は除く。"""
     if source not in _TEMPERATURE_COLUMNS:
         raise ValueError("source must be 'metar' or 'reanalysis'")
@@ -200,9 +202,10 @@ def monthly_precipitation_observed_days(observations: pd.DataFrame) -> pd.DataFr
 
 
 def _rounded(value: object, digits: int) -> float | None:
-    if value is None or pd.isna(value):  # type: ignore[call-overload]
+    # numpy の数も numbers.Real に入る。NaN は None にする（JSON に NaN を書かない）。
+    if not isinstance(value, numbers.Real) or math.isnan(value):
         return None
-    return round(float(value), digits)  # type: ignore[arg-type]
+    return round(float(value), digits)
 
 
 def _lookup(table: pd.DataFrame, city: str, key: str, value: str) -> dict[Any, Any]:

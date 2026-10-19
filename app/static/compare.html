@@ -22,7 +22,7 @@
     <section class="card wide" aria-labelledby="temperature-title">
       <h2 id="temperature-title">月ごとの平均気温（℃）<span class="badge">実測と再解析</span></h2>
       <svg id="temperature-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均気温"></svg>
-      <p class="note">実線は空港の観測（METAR）、破線は再解析（Open-Meteo）。2 つのずれは、再解析が数十 km のマス目の平均であることなどによります。</p>
+      <p class="note">実線は空港の観測（METAR）、破線は再解析（Open-Meteo）。2 つのずれの理由は調べていません（再解析は、広いマス目の平均です）。</p>
     </section>
 
     <section class="card wide" aria-labelledby="yearly-title">
@@ -59,7 +59,7 @@
     <section class="card wide" aria-labelledby="about-title">
       <h2 id="about-title">値の出どころ</h2>
       <p class="note"><strong>実測</strong>：空港の定時観測（METAR）。測器や観測者が、その場で測った値です。</p>
-      <p class="note"><strong>再解析</strong>：衛星・地上・気球などの観測を数値モデルに入れて計算し直した値（Open-Meteo の過去データ）。数十 km のマス目の平均で、気象庁などの観測の統計とは違うことがあります。</p>
+      <p class="note"><strong>再解析</strong>：衛星・地上・気球などの観測を数値モデルに入れて計算し直した値（Open-Meteo の過去データ）。広いマス目の平均で、気象庁などの観測の統計とは違うことがあります。</p>
     </section>
   </main>
 

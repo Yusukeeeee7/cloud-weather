@@ -312,6 +312,9 @@ def test_metar_auto_share() -> None:
         ("DRSN", False),
         ("DRDU", False),
         ("//", False),
+        # 2 文字ずつに分けられない壊れた群は数えない。
+        ("-R", False),
+        ("RAS", False),
         ("", False),
         (None, False),
     ],
@@ -408,6 +411,11 @@ def test_climate_summary_keeps_only_given_years() -> None:
 def test_climate_summary_rejects_unknown_mode() -> None:
     with pytest.raises(ValueError):
         climate.climate_summary(_summary_table(), years=[2025], mode="partial")
+
+
+def test_climate_summary_rejects_empty_years() -> None:
+    with pytest.raises(ValueError):
+        climate.climate_summary(_summary_table(), years=[], mode="sample")
 
 
 # 17
