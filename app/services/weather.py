@@ -43,6 +43,7 @@ class _RawCurrent(BaseModel):
     cloud_cover_mid: int
     cloud_cover_high: int
     wind_speed_10m: float
+    wind_direction_10m: float
 
 
 class _CacheEntry(BaseModel):
@@ -109,6 +110,7 @@ def build_weather_response(
             relative_humidity=current.relative_humidity_2m,
             precipitation_mm=current.precipitation,
             wind_speed_ms=current.wind_speed_10m,
+            wind_direction_deg=current.wind_direction_10m,
             cloud_cover=CloudCover(
                 total=current.cloud_cover,
                 low=current.cloud_cover_low,

@@ -26,6 +26,18 @@ const LAYERS = [
 ];
 // 1 段に並べる雲のかたまりの数。雲量に合わせて見せる数を変える。
 const PUFFS = 8;
+// 風向の 8 方位（compare.js・ml/climate.py の WIND_SECTORS と同じ区切り。北は 337.5° 以上・22.5° 未満）。
+// 矢印は風の流れていく向き（吹いてくる方位の反対）。北の風なら ↓。
+const WIND_SECTORS = [
+  { label: "北", arrow: "↓" },
+  { label: "北東", arrow: "↙" },
+  { label: "東", arrow: "←" },
+  { label: "南東", arrow: "↖" },
+  { label: "南", arrow: "↑" },
+  { label: "南西", arrow: "↗" },
+  { label: "西", arrow: "→" },
+  { label: "北西", arrow: "↘" },
+];
 // スライダーのつまみの幅（style.css の --thumb と同じ）と、目盛りの時刻の間隔（時間）。
 const THUMB_PX = 18;
 const TICK_EVERY = 6;
@@ -98,6 +110,53 @@ function weatherLabel(category) {
   return WEATHER_LABELS[category] || WEATHER_LABELS.unknown;
 }
 
+// /weather の wind_direction_deg（度。北 0・東 90、吹いてくる方向）の 8 方位。
+function windSector(degrees) {
+  const normalized = ((degrees % 360) + 360) % 360;
+  return WIND_SECTORS[Math.floor((normalized + 22.5) / 45) % WIND_SECTORS.length];
+}
+
+// 「現在」の風：比較ページの風配図と同じ枠（円 2 つ・東西南北）に、風の流れていく向きの矢印。
+function windTile(now) {
+  const sector = windSector(now.wind_direction_deg);
+  const label = `${sector.label}の風`;
+  const box = el("div", null, "tile wind-tile");
+  const center = 60;
+  const chart = svg("svg", { viewBox: "0 0 120 120", role: "img", class: "wind-rose" });
+  chart.setAttribute("aria-label", `${label}（矢印は風の流れていく向き）`);
+  for (const radius of [24, 48]) {
+    chart.append(svg("circle", { cx: center, cy: center, r: radius, class: "rose-ring" }));
+  }
+  for (const [text, x, y] of [["北", center, 9], ["東", 114, center + 4], ["南", center, 118], ["西", 6, center + 4]]) {
+    const node = svg("text", { x, y, class: "grid-label", "text-anchor": "middle" });
+    node.textContent = text;
+    chart.append(node);
+  }
+  // 北の風（上から下へ流れる）の矢印を描き、風向の角度だけ時計回りに回す。
+  const arrow = svg("g", { class: "wind-arrow", transform: `rotate(${now.wind_direction_deg} ${center} ${center})` });
+  arrow.append(
+    svg("line", { x1: center, y1: 18, x2: center, y2: 90 }),
+    svg("polygon", { points: `${center},102 ${center - 7},88 ${center + 7},88` }),
+  );
+  chart.append(arrow);
+  box.append(
+    el("span", "風", "tile-label"),
+    chart,
+    el("span", `${label} ${now.wind_speed_ms.toFixed(1)} m/s`, "tile-value wind-value"),
+  );
+  return box;
+}
+
+// 24 時間の予報の風：「↙ 北東 3.4 m/s」。矢印は読み上げない（方位の文字で伝える）。
+function windCell(hour) {
+  const sector = windSector(hour.wind_direction_deg);
+  const cell = el("td", null, "num wind");
+  const arrow = el("span", sector.arrow, "wind-arrow-text");
+  arrow.setAttribute("aria-hidden", "true");
+  cell.append(arrow, document.createTextNode(` ${sector.label} ${hour.wind_speed_ms.toFixed(1)} m/s`));
+  return cell;
+}
+
 function tile(label, value, sub) {
   const box = el("div", null, "tile");
   box.append(el("span", label, "tile-label"), el("span", value, "tile-value"));
@@ -165,7 +224,7 @@ function renderCurrent(weather, sunshine) {
     tile("天気", weatherLabel(now.weather), `${formatTime(now.time)} 現在`),
     tile("気温", `${now.temperature_c.toFixed(1)} ℃`, `体感 ${now.apparent_temperature_c.toFixed(1)} ℃`),
     tile("湿度", `${now.relative_humidity} %`, `露点 ${now.dew_point_c.toFixed(1)} ℃`),
-    tile("風速", `${now.wind_speed_ms.toFixed(1)} m/s`),
+    windTile(now),
     tile("雲量", `${cover.total} %`, `低 ${cover.low} / 中 ${cover.mid} / 高 ${cover.high}`),
     sunshineTile(sunshine),
   );
@@ -251,7 +310,7 @@ function renderHourly(weather, cloudBaseForecast, sunshine) {
     "気温",
     "降水確率",
     "降水量",
-    "風速",
+    "風",
     "雲量（低 / 中 / 高）",
     "日差し（前の 1 時間）",
     "雲底（予測）",
@@ -268,7 +327,7 @@ function renderHourly(weather, cloudBaseForecast, sunshine) {
       el("td", `${hour.temperature_c.toFixed(1)} ℃`, "num"),
       el("td", `${hour.precipitation_probability} %`, "num"),
       el("td", `${hour.precipitation_mm.toFixed(1)} mm`, "num"),
-      el("td", `${hour.wind_speed_ms.toFixed(1)} m/s`, "num"),
+      windCell(hour),
       cloudCell(hour.cloud_cover),
       sunshineCell(sun.get(hour.time)),
       cloudBaseCell(predictions.get(hour.time)),

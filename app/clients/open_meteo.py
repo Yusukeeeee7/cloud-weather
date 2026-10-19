@@ -23,6 +23,7 @@ CURRENT_VARIABLES = (
     "cloud_cover_mid",
     "cloud_cover_high",
     "wind_speed_10m",
+    "wind_direction_10m",
 )
 HOURLY_VARIABLES = (
     "temperature_2m",
@@ -38,6 +39,8 @@ HOURLY_VARIABLES = (
     "relative_humidity_2m",
     "pressure_msl",
     "wind_speed_10m",
+    # /weather の風向（#58。度、吹いてくる方向）。
+    "wind_direction_10m",
     # /sunshine に使う（/weather の応答には出さない）。どれも前の 1 時間の値。
     "sunshine_duration",
     "direct_radiation",

@@ -622,6 +622,34 @@ input[type="range"]::-moz-range-thumb {
   stroke-width: 2;
 }
 
+/* 今日の天気の「現在」の風（#58）。枠は風配図と同じ。 */
+.wind-rose {
+  width: 120px;
+  height: 120px;
+  margin: 4px 0;
+}
+
+.wind-arrow {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: var(--accent);
+}
+
+.wind-value {
+  font-size: 1.1rem;
+}
+
+td.wind {
+  white-space: nowrap;
+}
+
+.wind-arrow-text {
+  display: inline-block;
+  min-width: 1.2em;
+  color: var(--accent);
+}
+
 .rose.tokyo {
   fill: var(--tokyo);
 }
