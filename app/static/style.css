@@ -13,6 +13,13 @@
   --error: #b42318;
   --notice-bg: #fff4d6;
   --notice-text: #6b4a00;
+  /* 比較ページ（#25）の色。dataviz の検証スクリプトで、白と暗い面の両方で確かめた。 */
+  --tokyo: #2a78d6;
+  --berlin: #eb6834;
+  --band-0: #86b6ef;
+  --band-1: #5598e7;
+  --band-2: #256abf;
+  --band-3: #104281;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +37,12 @@
     --error: #ff8a80;
     --notice-bg: #3a3014;
     --notice-text: #f5d98b;
+    --tokyo: #3987e5;
+    --berlin: #d95926;
+    --band-0: #1c5cab;
+    --band-1: #3987e5;
+    --band-2: #86b6ef;
+    --band-3: #cde2fb;
   }
 }
 
@@ -464,4 +477,146 @@ input[type="range"]::-moz-range-thumb {
 
 .foot a {
   color: var(--accent);
+}
+
+/* 気候の比較ページ（#25）。 */
+.page-link {
+  color: var(--accent);
+}
+
+.intro,
+.legend {
+  max-width: 960px;
+  margin: 0 auto 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.legend .key {
+  margin-left: 12px;
+}
+
+.legend .key:first-child {
+  margin-left: 0;
+}
+
+.key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.key-tokyo {
+  background: var(--tokyo);
+}
+
+.key-berlin {
+  background: var(--berlin);
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.series {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.series.dashed {
+  stroke-dasharray: 6 4;
+}
+
+.series.tokyo {
+  stroke: var(--tokyo);
+}
+
+.series.berlin {
+  stroke: var(--berlin);
+}
+
+.dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.dot.tokyo,
+.bar.tokyo {
+  fill: var(--tokyo);
+}
+
+.dot.berlin,
+.bar.berlin {
+  fill: var(--berlin);
+}
+
+.pies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.pie-chart {
+  width: 160px;
+  height: 160px;
+}
+
+.slice {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.pie-legend {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.slice-0,
+.slice-key-0 {
+  fill: var(--band-0);
+  background: var(--band-0);
+}
+
+.slice-1,
+.slice-key-1 {
+  fill: var(--band-1);
+  background: var(--band-1);
+}
+
+.slice-2,
+.slice-key-2 {
+  fill: var(--band-2);
+  background: var(--band-2);
+}
+
+.slice-3,
+.slice-key-3 {
+  fill: var(--band-3);
+  background: var(--band-3);
 }

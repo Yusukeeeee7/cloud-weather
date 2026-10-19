@@ -344,6 +344,25 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - CDN・Web フォント・地図のタイルなど、外部のホストから読み込まない。
 - JS の動作（表示・スライダー）は自動テストせず、手元のブラウザで確かめる（2026-10-14 決定。テストの道具を足さないため）。
 
+### `GET /compare`（気候の比較の画面）
+
+東京とベルリンの 2018〜2025 年の気候を、棒・円・折れ線のグラフで比べる画面（#25、2026-10-19 決定）。
+
+- `app/static/` の `compare.html`・`compare.js`（`style.css` は `GET /` と共通）。`include_in_schema=False` で、`/openapi.json` に載せない（DAST が取り込む道の数を変えない）。`GET /` の見出しの横に、この画面へのリンクを置く。
+- 表示は、ブラウザが同じオリジンの `/static/climate.json` だけを読んで行う（ほかの API・外部のホストは呼ばない）。値は `textContent` と SVG の属性で入れる。グラフは SVG を自分で描く（依存のパッケージを足さない）。
+- `climate.json` は、`notebooks/09_climate.ipynb` が `ml/climate.py` の `climate_summary` で `data/processed/observations.parquet` から作り、コミットする（イメージに入る）。キー：`mode`（`full`／`sample`。コミットするのは `full`）、`source`、`period`（`start`・`end`・`dates: "local"`）、`cities.<city>.monthly`（12 行：`month`・`temperature_c_metar`・`temperature_c_reanalysis`・`wet_days_1mm`・`precipitation_observed_days`・`low_ceiling_share`）、`cities.<city>.yearly`（8 行：`year`・`precipitation_mm`・`complete_days`・`metar_auto_share`）、`cities.<city>.cloud_cover_share`（`0-25`・`25-50`・`50-75`・`75-100`）。割合は 0〜1 で小数 3 桁、ほかは小数 1 桁。値のない所は `null`（NaN・無限大は書かない）。
+- 値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の過去データ（再解析）を使う。グラフの見出しに「実測」「再解析」の札を付け、再解析の意味（観測を入れて数値モデルで計算し直した値。マス目の平均）を画面に書く。
+- 日ごとの集計は現地の日付で区切り、1 時間ごとの行がそろった日だけを使う（夏時間の切り替え日は 23・25 行）。日が欠けた年（2018 年は 1 月 1 日が欠ける）は、注に「○年は ○日分」と出す。
+- グラフ（どれも東京とベルリンを並べる）：
+  - 月ごとの平均気温（折れ線。実測は実線、再解析は破線）。月ごとの値は 8 年のすべての時間をまとめた平均。
+  - 年ごとの降水量（棒、再解析）。
+  - 月ごとの 1 mm 以上の日数（棒、再解析。現地の日の合計が 1.0 mm 以上の日。年あたりの平均）。
+  - 月ごとの降水を観測した日数（棒、実測。年あたりの平均）。その日の正時の METAR（前後 30 分以内の 1 つ）のどれかで降水があった日。正時のあいだだけ降った日は数えないので、実際より少なめになることを画面に書く。降水は、`weather_codes` の群のうち、降水の記号（`DZ`・`RA`・`SN`・`SG`・`PL`・`GR`・`GS`・`UP`）を含み、`VC`（飛行場から約 8〜16 km）で始まらず、`DR`・`BL`（吹き上げられた雪など）を含まないもの（7 の表「METAR の天気の記号」）。規格にない `VCRA` のような群も数えない。
+  - 雲量の分布（円、再解析。都市ごとに 1 つ）。区分は 0〜25 未満・25〜50 未満・50〜75 未満・75〜100 %。0〜100 の外や欠けがあれば集計を止める（`ValueError`）。
+  - 月ごとの低い雲底の時間の割合（折れ線、実測）。目的変数（9 の `target_m`）が 1,524 m より下の時間の割合。目的変数が欠ける時間は分母に入れない。注に、ベルリンの年ごとの自動観測（電文に `AUTO`）の割合を出す（2022 年に切り替わった）。
+- 色：都市は青・橙、雲量の区分は青の濃淡（暗い画面では明暗を逆にする）。dataviz の検証スクリプトで、白（`#ffffff`）と暗い面（`#1b212a`）の両方で、色覚の違いを含めて基準を満たすことを確かめた。
+- 出典（Open-Meteo の CC BY 4.0 とリンク、Iowa Environmental Mesonet）を表示する。グラフの見た目は自動テストせず、手元のブラウザで確かめる（`GET /` と同じ）。
+
 ## 6. キャッシュ
 
 - キー：`weather:{city}`、TTL：15分（現在・時間ごと・日ごとを 1 回の外部呼び出しでまとめて取得し、まとめてキャッシュする）
@@ -397,6 +416,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 薄明・南中の期待値（テスト用） | 米国海軍天文台（USNO） | `aa.usno.navy.mil`。定義は日の出入りが天頂角 90.8333°、薄明が 6°・12°・18°（spec と同じ）。1 年ぶんの表（`/calculated/rstt/year`、`task` は 2＝市民・3＝航海・4＝天文）と 1 日ぶんのAPI（`/api/rstt/oneday`。市民薄明・日の出入り・南中）。どちらも分単位。**アプリからは通信しない**（fixture の取得だけ） | 利用の制限は書かれていない | 確認済み（2026-10-12、#7。同上） |
 | 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、`start_date`・`end_date`（必須、`yyyy-mm-dd`）。`hourly=` に temperature_2m, dew_point_2m, relative_humidity_2m, pressure_msl, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m（precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」）。`wind_speed_unit=ms`、`timeformat=unixtime`、`timezone` の既定は GMT。`daily=` に sunrise, sunset（#7 のテストの期待値として取得）。データは再解析（ERA5 など。1940 年〜、5 日遅れ） | 非商用は API キー不要。上限は予報と同じ（600 回/分・5,000 回/時・10,000 回/日・300,000 回/月）。10 項目を超える・2 週間を超える要求は、複数回ぶんとして数えられる（式は公式に書かれていない） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
 | METAR過去データ | Iowa Environmental Mesonet（IEM） | `mesonet.agron.iastate.edu/cgi-bin/request/asos.py`。`station`（ICAO）、`data`（列。複数可）、`sts`・`ets`（開始を含み、終了を含まない）、`tz=UTC`、`format=onlycomma`、`missing=empty`、`trace=empty`、`report_type`（3＝定時、4＝臨時）。列：valid（観測の時刻）、tmpf・dwpf（華氏）、vsby（マイル）、skyc1〜4（雲の層の量）、skyl1〜4（雲の層の高さ、フィート）、wxcodes、metar（もとの電文）。mslp は対象の 2 空港では空 | パブリックドメイン（IEM の名前を書くことが望ましい）。同じ IP からは 1 秒に 1 回まで（超えると 429）、混雑時は 503、1 回の要求は 1,000 観測所・年まで（超えると 422） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
+| METAR の天気の記号 | WMO | `weather_codes`（IEM の `wxcodes`）の記号（#25 の「降水を観測した日数」に使う）。WMO-No. 782（2025 年版）5 節「PRESENT WEATHER」の Code table 4678（出典は WMO-No. 306）：強さ `-`（弱）・なし（並）・`+`（強）、`VC`（飛行場の基準点から約 8〜16 km。飛行場の上ではない）。記述 `MI`・`BC`・`PR`・`DR`（地上 2 m 未満に吹き上げられた）・`BL`（2 m より上に吹き上げられた）・`SH`・`TS`・`FZ`。降水 `DZ`・`RA`・`SN`・`SG`・`PL`・`GR`・`GS`・`UP`（自動観測で種類が分からない降水）。`DR`・`BL` は雪・砂・塵が風で吹き上げられたもので、降水ではない（同書の天気の説明 23・24）。降水が 2 種類以上なら 1 つの群にまとめる（例 `-SHSNRAGS`）。直前の天気（`RE`。前の 1 時間か前の観測から、観測の時刻には起きていない）は別の節で、**このデータの `weather_codes` には入っていない**（電文に `RERA` などがある 1,167 行で確かめた） | 同上 | 確認済み（2026-10-19、#25。人間の指示で AI が照合。WMO の e-Library（`library.wmo.int`）に接続できなかったので、モンゴルの航空気象の機関（`amc2.namem.gov.mn`）が公開している 2025 年版の PDF（表紙で 2025 edition・ISBN 978-92-63-10782-4 を確かめた）を取得し、5 節と天気の説明の原文を `pdftotext` で読んだ。WMO の公式のサイトの写しではない。規定そのもの（WMO-No. 306）は読んでいない） |
 
 - 外部通信のタイムアウト：接続 3 秒、全体 10 秒。リトライは最大 2 回（指数バックオフ）。
   - 「全体 10 秒」は 1 回の試行ごと（2026-10-12 決定、#6）。
@@ -591,6 +611,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | `06_error_analysis.ipynb` | 誤差の分析（#16 で追加）。検証の年の、上限より下の行の誤差を、都市・高さの帯・季節・向きなどに分けて数える。テストの年は読み込んだ直後に落とす | `reports/error_analysis.json`、`docs/model-card.md` 10 節 |
 | `07_improve.ipynb` | モデルの改善：設定の比較（#17 で追加）。6 つの設定を、2 つの検証の年（2023・2024）で比べて 1 つ選ぶ。テストの年は読み込んだ直後に落とす | `models/cloud_base.joblib`（v2。選んだ設定の、学習 2018〜2023 のモデル）、`reports/improvement.json` |
 | `08_evaluate_improved.ipynb` | モデルの改善：テストの年での評価（#17 で追加）。v2 を v1 と並べて評価し、成功基準を判定する。モデルは読み込むだけ | `reports/metrics_improved.json`、`docs/model-card.md` 11 節 |
+| `09_climate.ipynb` | 気候の比較ページの集計（#25 で追加）。`ml/climate.py` の `climate_summary` を呼ぶだけ。外部と通信しない。既定の `sample` は fixture の 2 日ぶんで動き、一時的な場所に書く | `app/static/climate.json`（`DATA_FETCH_MODE=full` で全期間（2018〜2025 年、現地の日付）を集計したもの） |
 
 ### データ取得（#8 で決めたこと、2026-10-12）
 
@@ -711,6 +732,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 完了（2026-10-16。main へのマージ後の CD で来歴と SBOM が付き、手元からの検証が成功。記録は `docs/provenance.md`） |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 完了（2026-10-17。main へのマージ後の CD（run 38974879281）で DAST の手順が成功し、push された。取り込んだ URL 11、High 0 件。記録は `docs/dast.md`） |
 | 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 実装済み（2026-10-19。main への push の実行（run 39252804563）が成功し、Security タブに結果が出た。初回 5.3。記録は `docs/scorecard.md`。週 1 回の実行は 2026-10-24 以降に確認） |
+| 25 | 気候の比較ページ | `data/processed/observations.parquet`（2018〜2025 年）から、東京とベルリンの気候の指標を集計して JSON に保存し、新しいページ `GET /compare` がそれを読んで棒・円・折れ線のグラフで比べる。値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の過去データ（再解析）を使い、グラフごとにどちらかを書く。集計は `ml/climate.py` の関数で行い、テストを付ける。日ごとの集計は現地の日付で区切る。ページは外部と通信せず、依存のパッケージを足さない（SVG を自分で描く） | 実装済み（2026-10-19。画面の見た目は人間がブラウザで確認する） |
 
 #16・#17 は、#13・#14 より先に進める（2026-10-13 に変更。それまでは「#13・#14 の後」としていた）。決まりは「9. モデルの改善」。
 

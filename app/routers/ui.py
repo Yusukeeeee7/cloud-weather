@@ -14,3 +14,9 @@ router = APIRouter()
 @router.get("/", include_in_schema=False)
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+
+
+@router.get("/compare", include_in_schema=False)
+async def compare() -> FileResponse:
+    # 気候の比較ページ（#25）。グラフは compare.js が /static/climate.json を読んで描く。
+    return FileResponse(STATIC_DIR / "compare.html", media_type="text/html")

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>気候の比較 - cloud-weather</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>気候の比較</h1>
+    <a class="page-link" href="/">現在の天気へ</a>
+  </header>
+  <p class="intro">東京（羽田空港 RJTT）とベルリン（ベルリン・ブランデンブルク空港 EDDB）の 2018〜2025 年。月ごとの値は 8 年をまとめた平均です。</p>
+  <p class="legend" aria-hidden="true">
+    <span class="key key-tokyo"></span>東京
+    <span class="key key-berlin"></span>ベルリン
+  </p>
+  <p id="error" class="error" hidden></p>
+
+  <main>
+    <section class="card wide" aria-labelledby="temperature-title">
+      <h2 id="temperature-title">月ごとの平均気温（℃）<span class="badge">実測と再解析</span></h2>
+      <svg id="temperature-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均気温"></svg>
+      <p class="note">実線は空港の観測（METAR）、破線は再解析（Open-Meteo）。2 つのずれの理由は調べていません（再解析は、広いマス目の平均です）。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="yearly-title">
+      <h2 id="yearly-title">年ごとの降水量（mm）<span class="badge">再解析</span></h2>
+      <svg id="yearly-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="年ごとの降水量"></svg>
+      <p id="yearly-note" class="note"></p>
+    </section>
+
+    <section class="card wide" aria-labelledby="wet-title">
+      <h2 id="wet-title">月ごとの 1 mm 以上の雨の日数（日）<span class="badge">再解析</span></h2>
+      <svg id="wet-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの 1 mm 以上の雨の日数"></svg>
+      <p class="note">現地の日付で区切った 1 日の降水量が 1 mm 以上の日。年あたりの平均です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="observed-title">
+      <h2 id="observed-title">月ごとの降水を観測した日数（日）<span class="badge">実測</span></h2>
+      <svg id="observed-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの降水を観測した日数"></svg>
+      <p class="note">正時の観測（METAR）のどれかで、雨・雪・霧雨などの降水が報告された日。正時のあいだだけ降った日は数えないので、実際より少なめです。量は問いません。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="cloud-title">
+      <h2 id="cloud-title">雲量（空を覆う割合）の分布<span class="badge">再解析</span></h2>
+      <div id="cloud-charts" class="pies"></div>
+      <p class="note">1 時間ごとの雲量を 4 つに分けた時間の割合です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="ceiling-title">
+      <h2 id="ceiling-title">月ごとの低い雲底（シーリング）の時間の割合（%）<span class="badge">実測</span></h2>
+      <svg id="ceiling-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの低い雲底の時間の割合"></svg>
+      <p class="note">空港の観測（METAR）で、BKN・OVC の雲のいちばん低い層が 1,524 m（5,000 ft）より下にあった時間の割合です。</p>
+      <p id="auto-note" class="note"></p>
+    </section>
+
+    <section class="card wide" aria-labelledby="about-title">
+      <h2 id="about-title">値の出どころ</h2>
+      <p class="note"><strong>実測</strong>：空港の定時観測（METAR）。測器や観測者が、その場で測った値です。</p>
+      <p class="note"><strong>再解析</strong>：衛星・地上・気球などの観測を数値モデルに入れて計算し直した値（Open-Meteo の過去データ）。広いマス目の平均で、気象庁などの観測の統計とは違うことがあります。</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="https://open-meteo.com/">Weather data by Open-Meteo.com</a>（CC BY 4.0）。METAR：Iowa Environmental Mesonet（Iowa State University）。
+  </footer>
+
+  <script src="/static/compare.js"></script>
+</body>
+</html>
