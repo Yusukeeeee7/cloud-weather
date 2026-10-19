@@ -14,6 +14,27 @@
 https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&timezone=<タイムゾーン>&timeformat=unixtime
 ```
 
+## `/weather` の入力（#25 の追加で取り直したもの）
+
+`/weather` の `hourly` に風速（`wind_speed_ms`）を足すため、いまのアプリ（`app/clients/open_meteo.py`）と同じ URL で取り直した（応答は取得したまま）。
+`/weather` のテストは、上の 4 つではなく、こちらを使う（`tests/conftest.py` の `load_forecast`・`load_forecast_iso8601`）。
+上の 4 つは、「4 項目のない保存値」のテスト（`load_legacy_forecast`・`LEGACY_NOW`）に残している。
+
+| ファイル | 取得日時（UTC） | 取得方法 |
+|---|---|---|
+| `open_meteo/forecast_tokyo_wind.json` | 2026-10-19T18:25:57Z〜18:25:58Z | `curl`、下の URL（`latitude=35.55&longitude=139.78`、`timezone=Asia/Tokyo`、`timeformat=unixtime`） |
+| `open_meteo/forecast_tokyo_wind_iso8601.json` | 同上 | 同上で `timeformat` の指定なし |
+| `open_meteo/forecast_berlin_wind.json` | 2026-10-19T18:25:57Z | `curl`、下の URL（`latitude=52.36&longitude=13.5`、`timezone=Europe/Berlin`、`timeformat=unixtime`） |
+| `open_meteo/forecast_berlin_wind_iso8601.json` | 同上 | 同上で `timeformat` の指定なし |
+
+```
+https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,sunshine_duration,direct_radiation,diffuse_radiation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&past_hours=24&forecast_hours=168&latitude=<緯度>&longitude=<経度>&timezone=<タイムゾーン>[&timeformat=unixtime]
+```
+
+- 4 つとも 200。`hourly` は 192 行で null はない。先頭は 2 都市とも 2026-10-18T18:00Z、最後は 2026-10-26T17:00Z。`hourly_units.wind_speed_10m` は `m/s`。
+- `current.time` は 2026-10-19T18:15Z。東京の `daily` の先頭は 2026-10-20、ベルリンは 2026-10-19（7 日の間に夏時間の終わり 10-25 をまたぐ）。
+- `tests/conftest.py` の `FIXED_NOW` を取得時刻の直後（2026-10-19T18:26:00.123456Z）に合わせている。取り直したら変える。
+
 ## 雲底高度の予測（#12 推論API）の入力
 
 `/cloud-base` は、`hourly` に 4 項目（`dew_point_2m`・`relative_humidity_2m`・`pressure_msl`・`wind_speed_10m`）を

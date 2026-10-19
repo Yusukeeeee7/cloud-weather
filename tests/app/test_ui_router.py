@@ -113,6 +113,13 @@ def test_app_script_shows_loading_state() -> None:
     assert '"status"' in script
 
 
+def test_app_script_shows_hourly_wind_speed() -> None:
+    # 追加 2 の⑤：24 時間の予報の表に、1 時間ごとの風速の列。
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "hour.wind_speed_ms" in script
+
+
 def test_app_script_has_retry_button() -> None:
     script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
 

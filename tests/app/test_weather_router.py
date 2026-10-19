@@ -31,6 +31,7 @@ HOURLY_KEYS = {
     "temperature_c",
     "precipitation_probability",
     "precipitation_mm",
+    "wind_speed_ms",
     "cloud_cover",
 }
 DAILY_KEYS = {
@@ -101,8 +102,8 @@ def test_weather_times_are_utc_with_z(
     assert UTC_Z.match(body["current"]["time"])
     expected = datetime.fromtimestamp(raw["current"]["time"], UTC)
     assert body["current"]["time"] == expected.strftime("%Y-%m-%dT%H:%M:%SZ")
-    # conftest で固定した時計（2026-10-12T15:02:30.123456Z）の秒未満を切り捨てた値。
-    assert body["fetched_at"] == "2026-10-12T15:02:30Z"
+    # conftest で固定した時計（2026-10-19T18:26:00.123456Z）の秒未満を切り捨てた値。
+    assert body["fetched_at"] == "2026-10-19T18:26:00Z"
 
 
 @pytest.mark.parametrize("city", ["tokyo", "berlin"])
@@ -308,7 +309,7 @@ def test_weather_second_request_is_cached(
     assert route.call_count == 1
     assert first.json()["cached"] is False
     assert second.json()["cached"] is True
-    assert second.json()["fetched_at"] == first.json()["fetched_at"] == "2026-10-12T15:02:30Z"
+    assert second.json()["fetched_at"] == first.json()["fetched_at"] == "2026-10-19T18:26:00Z"
     assert second.json()["current"] == first.json()["current"]
     assert second.json()["daily"] == first.json()["daily"]
 
@@ -333,7 +334,7 @@ def test_weather_refetches_after_ttl(
 
     assert route.call_count == 2
     assert body["cached"] is False
-    assert body["fetched_at"] == "2026-10-12T15:17:30Z"
+    assert body["fetched_at"] == "2026-10-19T18:41:00Z"
 
 
 def test_weather_cached_response_keeps_spec_shape(
@@ -480,7 +481,7 @@ def test_weather_returns_stale_when_upstream_fails(
     body = second.json()
     assert set(body) == TOP_LEVEL_KEYS
     assert (body["cached"], body["stale"]) == (True, True)
-    assert body["fetched_at"] == first.json()["fetched_at"] == "2026-10-12T15:02:30Z"
+    assert body["fetched_at"] == first.json()["fetched_at"] == "2026-10-19T18:26:00Z"
     assert body["current"] == first.json()["current"]
     assert len(body["hourly"]) == 24
     assert len(body["daily"]) == 7
@@ -588,7 +589,7 @@ def test_weather_recovers_after_stale(
 
     assert stale["stale"] is True
     assert (recovered["cached"], recovered["stale"]) == (False, False)
-    assert recovered["fetched_at"] == "2026-10-12T15:27:30Z"
+    assert recovered["fetched_at"] == "2026-10-19T18:51:00Z"
 
 
 def test_weather_uses_configured_stale_max_age(

@@ -230,13 +230,13 @@ def test_service_stale_reselects_hourly_by_now(
     clock = FakeClock(FIXED_NOW)
     _, first = _seed(open_meteo, raw, cache, clock)
 
-    # 取得（15:02:30）の 2 時間後。次の正時は 18:00。
+    # 取得（18:26:00）の 2 時間後。次の正時は 21:00。
     clock.now = FIXED_NOW + timedelta(hours=2)
     stale = _call(City.TOKYO, clock, cache)
 
     assert stale.stale is True
-    assert first.hourly[0].time == datetime(2026, 10, 12, 16, 0, tzinfo=UTC)
-    assert stale.hourly[0].time == datetime(2026, 10, 12, 18, 0, tzinfo=UTC)
+    assert first.hourly[0].time == datetime(2026, 10, 19, 19, 0, tzinfo=UTC)
+    assert stale.hourly[0].time == datetime(2026, 10, 19, 21, 0, tzinfo=UTC)
     assert len(stale.hourly) == 24
     assert stale.hourly[:22] == first.hourly[2:]
     # 値は fixture の同じ時刻の行。
@@ -345,14 +345,14 @@ def test_service_entry_invalid_at_now_is_not_returned_as_stale(
 ) -> None:
     # 取得時は返さない範囲（25 件目）にあった null が、正時をまたいで返す範囲に入る場合。
     raw = forecast("tokyo")
-    first_row = raw["hourly"]["time"].index(int(datetime(2026, 10, 12, 16, tzinfo=UTC).timestamp()))
+    first_row = raw["hourly"]["time"].index(int(datetime(2026, 10, 19, 19, tzinfo=UTC).timestamp()))
     with_null = copy.deepcopy(raw)
     with_null["hourly"]["temperature_2m"][first_row + 24] = None
     cache = MemoryCache()
-    clock = FakeClock(datetime(2026, 10, 12, 15, 55, tzinfo=UTC))
+    clock = FakeClock(datetime(2026, 10, 19, 18, 55, tzinfo=UTC))
     _seed(open_meteo, with_null, cache, clock)
 
-    clock.now = datetime(2026, 10, 12, 16, 20, tzinfo=UTC)
+    clock.now = datetime(2026, 10, 19, 19, 20, tzinfo=UTC)
     with pytest.raises(UpstreamError):
         _call(City.TOKYO, clock, cache)
 

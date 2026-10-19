@@ -26,6 +26,7 @@ from tests.conftest import (
     iso,
     load_past_forecast,
     mock_ok,
+    seed_weather_cache,
 )
 
 RESPONSE_KEYS = {"city", "model_version", "hourly"}
@@ -199,14 +200,13 @@ def test_forecast_shares_cache_with_weather(
 def test_forecast_refetches_when_cached_entry_lacks_items(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
+    # いまの /weather は 4 項目のない形を受け付けない（hourly に風速が要る）。
+    # なので、保存先に直接入れる。
     raw = load_past_forecast("tokyo")
-    route = mock_ok(open_meteo, _without_cloud_base_items(raw))
+    seed_weather_cache(client, "tokyo", _without_cloud_base_items(raw), PAST_NOW)
+    route = mock_ok(open_meteo, raw)
     fake, _ = fake_model(850.0)
     use_model(fake)
-    weather = client.get("/weather", params={"city": "tokyo"})
-    assert (weather.status_code, route.call_count) == (200, 1)
-
-    route.mock(return_value=httpx.Response(200, json=raw))
     clock.now = PAST_NOW + timedelta(minutes=5)
     forecast = client.get("/cloud-base/forecast", params={"city": "tokyo"})
     again = client.get("/cloud-base/forecast", params={"city": "tokyo"})
@@ -215,22 +215,23 @@ def test_forecast_refetches_when_cached_entry_lacks_items(
     assert forecast.json()["hourly"][0]["baseline_m"] == expected_baseline_m(raw, FIRST)
     # 呼び直した応答は保存され、次は外部APIを呼ばない。
     assert again.json() == forecast.json()
-    assert route.call_count == 2
+    assert route.call_count == 1
 
 
 def test_forecast_old_entry_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = mock_ok(open_meteo, _without_cloud_base_items(load_past_forecast("tokyo")))
+    old = _without_cloud_base_items(load_past_forecast("tokyo"))
+    seed_weather_cache(client, "tokyo", old, PAST_NOW)
+    route = open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
     fake, _ = fake_model(850.0)
     use_model(fake)
-    client.get("/weather", params={"city": "tokyo"})
-
-    route.mock(return_value=httpx.Response(500))
     clock.now = PAST_NOW + timedelta(minutes=5)
     response = client.get("/cloud-base/forecast", params={"city": "tokyo"})
 
     assert_error(response, 502, "upstream_error")
+    # 保存値を見たうえで、外部APIを呼んで失敗している。
+    assert route.call_count > 0
 
 
 def test_forecast_uses_stale_cache(

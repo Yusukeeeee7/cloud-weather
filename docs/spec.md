@@ -87,6 +87,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
       "temperature_c": 21.8,
       "precipitation_probability": 20,
       "precipitation_mm": 0.0,
+      "wind_speed_ms": 2.8,
       "cloud_cover": {"total": 70, "low": 50, "mid": 20, "high": 0}
     }
   ],
@@ -117,6 +118,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
 - `city` を省略した場合は `tokyo` として扱う（2026-10-12 決定。使い始めやすくするため）。空文字（`city=`）は省略とは扱わず 422 `invalid_city`。
 - `current` の項目が Open-Meteo の応答に欠けている・null の場合は 502 `upstream_error`（一部だけ null で返さない。2026-10-12 決定）。
 - 機能ごとに段階的に追加する：#3 で `city`・`timezone`・`current`・`source`・`fetched_at`、#4 で `hourly`・`daily`、#5 で `cached`、#6 で `stale`（2026-10-12 決定）。未実装のキーは返さない。
+- `hourly` の `wind_speed_ms` は #25 の追加で足した（2026-10-19。Open-Meteo の `hourly=wind_speed_10m`、`wind_speed_unit=ms`。#12 から取得はしていた）。ほかの項目と同じく、返す範囲で欠けている・null なら 502。
 - `cached` は、キャッシュの値を返したとき `true`、外部APIから取得した値を返したとき `false`（#6 で「外部APIを呼ばずに」から書き直した。stale のときは外部APIを呼んだうえでキャッシュの値を返すため）。
   - キャッシュから返すときも、`fetched_at` は外部APIから取得した時刻のまま。`hourly` の 24 件は、返すたびにその時刻で選び直す（過ぎた時刻を先頭に残さない。2026-10-12 決定）。
 - `stale` は、外部APIが失敗し、TTL を過ぎた保存値を返したとき `true`。このとき `cached` も `true`。それ以外は常に `false`（2026-10-12 決定、#6）。

@@ -74,11 +74,11 @@ def test_daylight_matches_open_meteo_within_2_minutes(client: TestClient, city: 
         assert abs(_parse(body["sunset"]) - sunset) <= TOLERANCE
 
 
-@pytest.mark.parametrize(("city", "expected"), [("tokyo", "2026-10-13"), ("berlin", "2026-10-12")])
+@pytest.mark.parametrize(("city", "expected"), [("tokyo", "2026-10-20"), ("berlin", "2026-10-19")])
 def test_daylight_missing_date_uses_local_today(
     client: TestClient, city: str, expected: str
 ) -> None:
-    # conftest の時計は 2026-10-12T15:02:30Z。東京は現地の日付が 10-13 に進んでいる。
+    # conftest の時計は 2026-10-19T18:26:00Z。東京は現地の日付が 10-20 に進んでいる。
     response = client.get("/daylight", params={"city": city})
 
     assert response.status_code == 200
@@ -96,7 +96,7 @@ def test_daylight_without_parameters(client: TestClient) -> None:
     response = client.get("/daylight")
 
     assert response.status_code == 200
-    assert (response.json()["city"], response.json()["date"]) == ("tokyo", "2026-10-13")
+    assert (response.json()["city"], response.json()["date"]) == ("tokyo", "2026-10-20")
 
 
 def test_daylight_null_twilight_is_returned_as_null(client: TestClient) -> None:

@@ -34,6 +34,7 @@ class HourlyForecast(BaseModel):
     temperature_c: float
     precipitation_probability: int
     precipitation_mm: float
+    wind_speed_ms: float
     cloud_cover: CloudCover
 
 
