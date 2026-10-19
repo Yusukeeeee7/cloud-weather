@@ -189,3 +189,9 @@ Python のパッケージは足さない。
   - ワークフロー全体の権限を `contents: write` にする → **検出しなかった**（終了コード 0。抑えられた指摘が 3 → 5 件に増えただけ）。CI の zizmor は既定の重さより低い指摘を出さないため。`publish_results: true` のときは、README の制限によれば Scorecard の API がワークフロー全体の write の権限を断るはず（未確認）だが、既定（`fail_on_publish_error: false`）では警告だけになる。
 - 上の見逃しへの対応として、`fail_on_publish_error: true` を足した（2026-10-19、人間の回答「おすすめで」）。公式の README の例にもある設定。送信が断られたらジョブが失敗する。ワークフロー全体に write の権限を書くと断られるのは README の制限から読んだことで、実際に断られるかは確かめていない（レビューの指摘で書き直した）。気づけるのは main での実行のときで、通信のエラー・408・429・5xx は警告のまま（`action.yaml` の原文の説明）。
 - レビューの指摘で、根拠のない「public のリポジトリでは無料」（upload-sarif）を消した（2026-10-19）。
+
+## マージ後の変更（PR 2、`feature/issues_46-verify`）
+
+- **AI の誤り**：`fail_on_publish_error` は v2.5.0 にない入力だった。計画のとき `action.yaml` を、固定した版（`v2.5.0` のタグ）ではなく main ブランチの最新から読んだため。入力は v2.5.0 の 2 日後（2026-10-14、コミット `1dfaf353`）に足されたもの。初回の実行（run 39252804563）で `Unexpected input(s) 'fail_on_publish_error'` の警告が出て分かった。`gh api ".../contents/action.yaml?ref=v2.5.0"` で、v2.5.0 の入力にないことを確かめた（原文）。
+- 対応（2026-10-19、人間の回答「おすすめの修正をしてほしい」）：入力を消し、「ワークフロー全体の write の権限は、このジョブも CI の zizmor（既定）も見つけない」ことを `docs/scorecard.md` に書いた。
+- 再発防止：Action の入力は、固定した版のタグの `action.yaml` で確かめる。
