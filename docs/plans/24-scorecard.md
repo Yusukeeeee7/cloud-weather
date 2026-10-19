@@ -149,7 +149,7 @@ Python のコードを足さないので、pytest のテストはない（Red �
 | パッケージ | 理由 | 代替案 |
 |---|---|---|
 | Action `ossf/scorecard-action` v2.5.0（SHA 固定） | 受け入れ条件の Scorecard を GitHub Actions で動かす公式の方法 | Scorecard の CLI を Docker で動かす（トークンの扱いが増え、Security タブへの送信は別に要る） |
-| Action `github/codeql-action/upload-sarif` v4.38.3（SHA 固定） | 結果を Security タブ（コードスキャン）に出すため。public のリポジトリでは無料 | なし（Security タブに出すのはこの方法だけ） |
+| Action `github/codeql-action/upload-sarif` v4.38.3（SHA 固定） | 結果を Security タブ（コードスキャン）に出すため | なし（Security タブに出すのはこの方法だけ） |
 
 Python のパッケージは足さない。
 
@@ -186,5 +186,6 @@ Python のパッケージは足さない。
 - わざと壊して zizmor（CI と同じ設定）が見つけるかを確かめた：
   - `persist-credentials: false` を消す → `artipacked`（medium）で終了コード 13。検出した。
   - `ossf/scorecard-action` を SHA ではなく `@v2.5.0` にする → `unpinned-uses`（high）で終了コード 14。検出した。
-  - ワークフロー全体の権限を `contents: write` にする → **検出しなかった**（終了コード 0。抑えられた指摘が 3 → 5 件に増えただけ）。CI の zizmor は既定の重さより低い指摘を出さないため。`publish_results: true` のときは Scorecard の API がワークフロー全体の write の権限を断るが、既定（`fail_on_publish_error: false`）では警告だけになる。
-- 上の見逃しへの対応として、`fail_on_publish_error: true` を足した（2026-10-19、人間の回答「おすすめで」）。公式の README の例にもある設定。送信が断られたら（ワークフロー全体に write の権限を書いたときなど）、ジョブが失敗する。気づけるのは main での実行のときで、通信のエラー・408・429・5xx は警告のまま（`action.yaml` の原文の説明）。
+  - ワークフロー全体の権限を `contents: write` にする → **検出しなかった**（終了コード 0。抑えられた指摘が 3 → 5 件に増えただけ）。CI の zizmor は既定の重さより低い指摘を出さないため。`publish_results: true` のときは、README の制限によれば Scorecard の API がワークフロー全体の write の権限を断るはず（未確認）だが、既定（`fail_on_publish_error: false`）では警告だけになる。
+- 上の見逃しへの対応として、`fail_on_publish_error: true` を足した（2026-10-19、人間の回答「おすすめで」）。公式の README の例にもある設定。送信が断られたらジョブが失敗する。ワークフロー全体に write の権限を書くと断られるのは README の制限から読んだことで、実際に断られるかは確かめていない（レビューの指摘で書き直した）。気づけるのは main での実行のときで、通信のエラー・408・429・5xx は警告のまま（`action.yaml` の原文の説明）。
+- レビューの指摘で、根拠のない「public のリポジトリでは無料」（upload-sarif）を消した（2026-10-19）。

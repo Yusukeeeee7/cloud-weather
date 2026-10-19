@@ -13,7 +13,7 @@
 | トークン | 既定の `GITHUB_TOKEN`（PAT は使わない）。`actions/checkout` は `persist-credentials: false` |
 | 権限 | ワークフロー全体は `contents: read`。ジョブは `contents: read`・`security-events: write`（Security タブへの送信）・`id-token: write`（`publish_results` の本人確認） |
 | 結果の送り先 | Security タブ（コードスキャン。SARIF）、`api.scorecard.dev`（`publish_results: true`） |
-| 失敗の扱い | 点が低くても失敗にしない（受け入れ条件にない）。`api.scorecard.dev` への送信が断られたら失敗にする（`fail_on_publish_error: true`。ワークフロー全体に write の権限を書いたときなど。CI の zizmor は既定ではこれを見つけない）。通信のエラー・408・429・5xx は警告だけ |
+| 失敗の扱い | 点が低くても失敗にしない（受け入れ条件にない）。`api.scorecard.dev` への送信が断られたら失敗にする（`fail_on_publish_error: true`）。README の制限によれば、ワークフロー全体に write の権限を書くと断られるはず（実際に断られるかは未確認。CI の zizmor は既定ではこの権限を見つけない）。通信のエラー・408・429・5xx は警告だけ |
 
 - `publish_results: true` のときの制限（scorecard-action の README。WebFetch の要約で読んだ）：ワークフローの最上位に `env`・`defaults`・write の権限を書けない。ジョブにも `env`・`defaults`・`container`・`services` を書けない。使える Action は `actions/checkout`・`actions/upload-artifact`・`github/codeql-action/upload-sarif`・`ossf/scorecard-action`・`step-security/harden-runner` だけ。このワークフローに手順を足すときは、この制限を守る。
 - リポジトリは public で、OpenSSF がもともと週 1 回スキャンして結果を公開している。`publish_results: true` は、その結果をこのワークフローの結果で置き換える（新しく公開される情報はない）。
