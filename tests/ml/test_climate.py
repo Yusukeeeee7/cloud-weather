@@ -2,12 +2,13 @@
 
 import json
 import math
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import pytest
 
 from ml import climate
+from tests.solar_refs import usno_twilight
 
 
 def _hours(city: str, start: str, count: int, **columns: list[object]) -> pd.DataFrame:
@@ -380,6 +381,100 @@ def test_is_precipitation(codes: str | None, expected: bool) -> None:
     assert climate.is_precipitation(codes) is expected
 
 
+# 追加 2 の⑥：星空日和の夜。暗い時間（太陽が −18° より下）は USNO の天文薄明の表で決める。
+_CLOUDY = 90.0
+_CLEAR = 10.0
+
+
+def _night_table(
+    city: str, day: date, clear_dark: int, clear_value: float = _CLEAR
+) -> tuple[pd.DataFrame, int]:
+    """`day` の 0 時（UTC）から 48 時間。
+
+    `day` の夜の暗い正時のうち、先頭の `clear_dark` 個を晴れにする。
+
+    昼（暗くない時間）は晴れ、ほかの夜の暗い時間は曇り。戻り値は表と、`day` の夜の暗い正時の数。
+    """
+    twilight = usno_twilight(city, "astronomical")
+    dusk, dawn = twilight[day][1], twilight[day + timedelta(days=1)][0]
+    assert dusk is not None and dawn is not None
+    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    times = [start + timedelta(hours=hour) for hour in range(48)]
+    # USNO は分単位で、こちらの計算とは ±2 分ずれうる。境目の近くの正時は使わない。
+    margin = timedelta(minutes=2)
+    assert all(abs(at - dusk) > margin and abs(at - dawn) > margin for at in times)
+    night = [dusk < at < dawn for at in times]
+    others = [usno_twilight(city, "astronomical")[at.date()] for at in times]
+    dark_anywhere = [
+        (end is not None and at > end) or (begin is not None and at < begin)
+        for at, (begin, end) in zip(times, others, strict=True)
+    ]
+    cloud: list[float] = []
+    clear_left = clear_dark
+    for in_night, dark in zip(night, dark_anywhere, strict=True):
+        if in_night:
+            cloud.append(clear_value if clear_left > 0 else _CLOUDY)
+            clear_left -= 1
+        else:
+            cloud.append(_CLOUDY if dark else _CLEAR)
+    return _hours(city, start.isoformat(), 48, cloud_cover=cloud), sum(night)
+
+
+# 「ちょうど半分」を作れるように、暗い正時が偶数の夜を使う。
+_EVEN_NIGHT = date(2026, 4, 15)
+
+
+def test_star_nights_half_clear_is_star() -> None:
+    _, dark = _night_table("tokyo", _EVEN_NIGHT, 0)
+    assert dark % 2 == 0
+    table, _ = _night_table("tokyo", _EVEN_NIGHT, dark // 2)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {4: 1.0}
+
+
+def test_star_nights_less_than_half_clear_is_not_star() -> None:
+    _, dark = _night_table("tokyo", _EVEN_NIGHT, 0)
+    assert dark % 2 == 0
+    table, _ = _night_table("tokyo", _EVEN_NIGHT, dark // 2 - 1)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {4: 0.0}
+
+
+def test_star_nights_daytime_clear_does_not_count() -> None:
+    # 昼はすべて晴れ、夜の暗い時間はすべて曇り。
+    table, _ = _night_table("tokyo", date(2026, 1, 15), 0)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {1: 0.0}
+
+
+def test_star_nights_cloud_cover_boundary() -> None:
+    # 25 % 未満が晴れ。25.0 は晴れではない。
+    clear, _ = _night_table("tokyo", date(2026, 1, 15), 48, clear_value=24.9)
+    edge, _ = _night_table("tokyo", date(2026, 1, 15), 48, clear_value=25.0)
+
+    assert _as_dict(climate.monthly_star_nights(clear), "month", "days") == {1: 1.0}
+    assert _as_dict(climate.monthly_star_nights(edge), "month", "days") == {1: 0.0}
+
+
+def test_star_nights_without_darkness_are_not_star() -> None:
+    # ベルリンの夏至の前後は、太陽が −18° まで沈まない（USNO の表で「////」）。
+    # 空がずっと晴れでも数えない。
+    twilight = usno_twilight("berlin", "astronomical")
+    days = [date(2026, 6, 20) + timedelta(days=n) for n in range(4)]
+    assert all(twilight[day] == (None, None) for day in days)
+    table = _hours("berlin", "2026-06-21T00:00", 48, cloud_cover=[_CLEAR] * 48)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {6: 0.0}
+
+
 def test_precipitation_observed_days_average_per_year() -> None:
     def day(local_day: str, codes: list[str | None]) -> pd.DataFrame:
         table = _tokyo_day(local_day)
@@ -462,6 +557,7 @@ def test_climate_summary_keys() -> None:
             "temperature_c_reanalysis",
             "dew_point_c_metar",
             "wind_speed_ms_reanalysis",
+            "star_nights",
             "wet_days_1mm",
             "precipitation_observed_days",
             "low_ceiling_share",
@@ -469,6 +565,9 @@ def test_climate_summary_keys() -> None:
         assert city["monthly"][0]["temperature_c_metar"] == 10.0
         assert city["monthly"][0]["dew_point_c_metar"] == 4.0
         assert city["monthly"][0]["wind_speed_ms_reanalysis"] == 3.0
+        # 雲量 50 % の表なので、星空日和の夜はない（データのある 1 月は 0、ない月は null）。
+        assert city["monthly"][0]["star_nights"] == 0.0
+        assert city["monthly"][5]["star_nights"] is None
         assert city["monthly"][0]["low_ceiling_share"] == 0.0
         # データのない月は null。
         assert city["monthly"][5]["temperature_c_metar"] is None

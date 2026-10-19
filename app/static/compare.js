@@ -280,6 +280,14 @@ function render(data) {
     pies.append(pieChart(city, data.cities[city.key].cloud_cover_share));
   }
 
+  barChart(
+    document.getElementById("star-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "star_nights"), className: city.key })),
+    "",
+    1,
+  );
+
   lineChart(
     document.getElementById("ceiling-chart"),
     MONTH_LABELS,

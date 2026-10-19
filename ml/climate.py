@@ -15,6 +15,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from app.cities import CITIES, City
+from app.services.solar import solar_elevation_deg
 from ml.target import CEILING_CAP_M, target_m
 
 SOURCE = "data/processed/observations.parquet"
@@ -31,6 +32,10 @@ _VICINITY = "VC"
 _AUTO = r"\bAUTO\b"
 _TEMPERATURE_COLUMNS = {"metar": "metar_temperature_c", "reanalysis": "temperature_c"}
 _MONTHS = range(1, 13)
+# 星空日和の夜：天文薄明（spec 5 の `/daylight`）の高度より下を暗い時間とし、
+# 雲量 25 % 未満を晴れとする。
+ASTRONOMICAL_DARK_DEG = -18.0
+STAR_CLEAR_COVER = 25.0
 
 TemperatureSource = Literal["metar", "reanalysis"]
 
@@ -224,6 +229,32 @@ def monthly_precipitation_observed_days(observations: pd.DataFrame) -> pd.DataFr
     return _average_days_per_year(daily, daily["observed"])
 
 
+def _solar_elevation_deg(observations: pd.DataFrame) -> pd.Series:
+    """その都市・その時刻の太陽の高度（`/daylight` と同じ計算）。"""
+    values = [
+        solar_elevation_deg(CITIES[City(name)].latitude, CITIES[City(name)].longitude, at)
+        for name, at in zip(observations["city"], observations["time"], strict=True)
+    ]
+    return pd.Series(values, index=observations.index, dtype="float64")
+
+
+def monthly_star_nights(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの星空日和の夜の数の、年あたりの平均（このサイト独自の目安）。
+
+    暗い正時（太陽が −18° より下）のうち、雲量（再解析）が 25 % 未満の時間が半分以上ある夜。
+    夜は夕方の現地の日付で数える（正午から次の日の正午まで）。暗くならない夜は数えない。
+    """
+    dark = _solar_elevation_deg(observations) < ASTRONOMICAL_DARK_DEG
+    clear = observations["cloud_cover"].astype("float64") < STAR_CLEAR_COVER
+    nights = (_local_times(observations) - pd.Timedelta(hours=12)).dt.date
+    table = pd.DataFrame(
+        {"city": observations["city"], "local_date": nights, "dark": dark, "clear": dark & clear}
+    )
+    counts = table.groupby(["city", "local_date"])[["dark", "clear"]].sum().reset_index()
+    star = (counts["dark"] > 0) & (counts["clear"] * 2 >= counts["dark"])
+    return _average_days_per_year(counts, star)
+
+
 def _rounded(value: object, digits: int) -> float | None:
     # numpy の数も numbers.Real に入る。NaN は None にする（JSON に NaN を書かない）。
     if not isinstance(value, numbers.Real) or math.isnan(value):
@@ -246,6 +277,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
     wet = _lookup(monthly_wet_days(observations), city, "month", "days")
     observed = _lookup(monthly_precipitation_observed_days(observations), city, "month", "days")
     low = _lookup(monthly_low_ceiling_share(observations), city, "month", "share")
+    star = _lookup(monthly_star_nights(observations), city, "month", "days")
     monthly = [
         {
             "month": month,
@@ -256,6 +288,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
             "wet_days_1mm": _rounded(wet.get(month), 1),
             "precipitation_observed_days": _rounded(observed.get(month), 1),
             "low_ceiling_share": _rounded(low.get(month), 3),
+            "star_nights": _rounded(star.get(month), 1),
         }
         for month in _MONTHS
     ]
