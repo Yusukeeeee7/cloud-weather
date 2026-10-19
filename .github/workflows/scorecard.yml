@@ -38,10 +38,8 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
-          # 送信が断られたら失敗にする。README の制限によれば、ワークフロー全体に write の権限を書くと断られるはず（実際に断られるかは未確認）。
-          # CI の zizmor は、その権限を既定では見つけない。
-          # 通信のエラー・408・429・5xx は再試行し、警告だけになる（action.yaml の説明）。
-          fail_on_publish_error: true
+          # fail_on_publish_error は v2.5.0 にない入力（v2.5.0 の後に main に足された）。書いても読まれないので使わない。
+          # そのため、ワークフロー全体に write の権限を書いても、このジョブも CI の zizmor（既定）も失敗しない（docs/scorecard.md）。
 
       - name: Upload to code scanning
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
