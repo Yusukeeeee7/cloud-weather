@@ -477,6 +477,65 @@ def test_star_nights_without_darkness_are_not_star() -> None:
     assert _as_dict(result, "month", "days") == {6: 0.0}
 
 
+# 追加 2 の⑦：アイス日和・ビール日和。日最高気温は METAR の正時の値の最大。
+# 25 ℃・30 ℃は気象庁の「夏日」「真夏日」（日最高気温が 25 度・30 度以上の日）。
+def _metar_day(local_day: str, high: float, codes: str | None = None) -> pd.DataFrame:
+    """東京の現地の 1 日（24 行）。
+
+    最高気温は 12 時の `high`、ほかは 10.0。`codes` は 15 時の天気。
+    """
+    start = pd.Timestamp(local_day, tz="Asia/Tokyo").tz_convert("UTC")
+    temperatures = [10.0] * 24
+    temperatures[12] = high
+    weather: list[object] = [None] * 24
+    weather[15] = codes
+    return _hours(
+        "tokyo",
+        str(start),
+        24,
+        metar_temperature_c=temperatures,
+        weather_codes=weather,
+        precipitation_mm=[0.0] * 24,
+    )
+
+
+def test_daily_max_temperature_uses_local_day_and_complete_days() -> None:
+    full = _metar_day("2025-07-10", 28.0)
+    missing = _metar_day("2025-07-11", 31.0)
+    missing.loc[missing.index[3], "metar_temperature_c"] = None
+    partial = _metar_day("2025-07-12", 33.0).iloc[:23]
+
+    result = climate.daily_max_temperature_c(_concat(full, missing, partial))
+
+    assert _as_dict(result, "local_date", "max_temperature_c") == {date(2025, 7, 10): 28.0}
+
+
+def test_ice_days_threshold_and_precipitation() -> None:
+    table = _concat(
+        _metar_day("2025-07-10", 24.9),
+        _metar_day("2025-07-11", 25.0),
+        _metar_day("2025-07-12", 26.0, codes="-RA"),
+        _metar_day("2025-07-13", 26.0, codes="BR"),
+    )
+
+    result = climate.monthly_ice_days(table)
+
+    # 25.0 ℃（境目）と、霧（BR。降水ではない）の日の 2 日。
+    assert _as_dict(result, "month", "days") == {7: 2.0}
+
+
+def test_beer_days_threshold_ignores_precipitation() -> None:
+    table = _concat(
+        _metar_day("2025-07-10", 29.9),
+        _metar_day("2025-07-11", 30.0),
+        _metar_day("2025-07-12", 31.0, codes="+TSRA"),
+    )
+
+    result = climate.monthly_beer_days(table)
+
+    assert _as_dict(result, "month", "days") == {7: 2.0}
+
+
 # 追加 2 の⑧：風配図。METAR の電文の風の群（WMO-No. 782 の 2 節。spec 7「METAR の風」）。
 def _iem_sample_rows() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
@@ -644,6 +703,8 @@ def test_climate_summary_keys() -> None:
             "dew_point_c_metar",
             "wind_speed_ms_reanalysis",
             "star_nights",
+            "ice_days",
+            "beer_days",
             "wet_days_1mm",
             "precipitation_observed_days",
             "low_ceiling_share",
@@ -654,6 +715,9 @@ def test_climate_summary_keys() -> None:
         # 雲量 50 % の表なので、星空日和の夜はない（データのある 1 月は 0、ない月は null）。
         assert city["monthly"][0]["star_nights"] == 0.0
         assert city["monthly"][5]["star_nights"] is None
+        # 気温 10 ℃の表なので、アイス日和・ビール日和はない。
+        assert city["monthly"][0]["ice_days"] == 0.0
+        assert city["monthly"][0]["beer_days"] == 0.0
         assert city["monthly"][0]["low_ceiling_share"] == 0.0
         # データのない月は null。
         assert city["monthly"][5]["temperature_c_metar"] is None

@@ -18,7 +18,9 @@
           "wet_days_1mm": 5.9,
           "precipitation_observed_days": 9.6,
           "low_ceiling_share": 0.135,
-          "star_nights": 16.9
+          "star_nights": 16.9,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 2,
@@ -29,7 +31,9 @@
           "wet_days_1mm": 6.4,
           "precipitation_observed_days": 10.5,
           "low_ceiling_share": 0.185,
-          "star_nights": 10.9
+          "star_nights": 10.9,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 3,
@@ -40,7 +44,9 @@
           "wet_days_1mm": 12.6,
           "precipitation_observed_days": 16.8,
           "low_ceiling_share": 0.298,
-          "star_nights": 10.4
+          "star_nights": 10.4,
+          "ice_days": 0.2,
+          "beer_days": 0.0
         },
         {
           "month": 4,
@@ -51,7 +57,9 @@
           "wet_days_1mm": 11.6,
           "precipitation_observed_days": 15.8,
           "low_ceiling_share": 0.266,
-          "star_nights": 10.1
+          "star_nights": 10.1,
+          "ice_days": 1.5,
+          "beer_days": 0.0
         },
         {
           "month": 5,
@@ -62,7 +70,9 @@
           "wet_days_1mm": 13.4,
           "precipitation_observed_days": 16.8,
           "low_ceiling_share": 0.3,
-          "star_nights": 6.6
+          "star_nights": 6.6,
+          "ice_days": 7.1,
+          "beer_days": 0.5
         },
         {
           "month": 6,
@@ -73,7 +83,9 @@
           "wet_days_1mm": 14.8,
           "precipitation_observed_days": 18.5,
           "low_ceiling_share": 0.383,
-          "star_nights": 5.6
+          "star_nights": 5.6,
+          "ice_days": 10.6,
+          "beer_days": 5.1
         },
         {
           "month": 7,
@@ -84,7 +96,9 @@
           "wet_days_1mm": 16.4,
           "precipitation_observed_days": 17.6,
           "low_ceiling_share": 0.34,
-          "star_nights": 6.8
+          "star_nights": 6.8,
+          "ice_days": 13.0,
+          "beer_days": 20.0
         },
         {
           "month": 8,
@@ -95,7 +109,9 @@
           "wet_days_1mm": 12.5,
           "precipitation_observed_days": 14.5,
           "low_ceiling_share": 0.249,
-          "star_nights": 9.0
+          "star_nights": 9.0,
+          "ice_days": 16.4,
+          "beer_days": 26.6
         },
         {
           "month": 9,
@@ -106,7 +122,9 @@
           "wet_days_1mm": 14.6,
           "precipitation_observed_days": 20.0,
           "low_ceiling_share": 0.383,
-          "star_nights": 6.6
+          "star_nights": 6.6,
+          "ice_days": 9.4,
+          "beer_days": 10.6
         },
         {
           "month": 10,
@@ -117,7 +135,9 @@
           "wet_days_1mm": 12.5,
           "precipitation_observed_days": 18.4,
           "low_ceiling_share": 0.313,
-          "star_nights": 9.4
+          "star_nights": 9.4,
+          "ice_days": 4.1,
+          "beer_days": 0.6
         },
         {
           "month": 11,
@@ -128,7 +148,9 @@
           "wet_days_1mm": 8.4,
           "precipitation_observed_days": 12.5,
           "low_ceiling_share": 0.213,
-          "star_nights": 12.4
+          "star_nights": 12.4,
+          "ice_days": 0.4,
+          "beer_days": 0.0
         },
         {
           "month": 12,
@@ -139,7 +161,9 @@
           "wet_days_1mm": 7.0,
           "precipitation_observed_days": 10.1,
           "low_ceiling_share": 0.172,
-          "star_nights": 13.0
+          "star_nights": 13.0,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         }
       ],
       "yearly": [
@@ -222,7 +246,9 @@
           "wet_days_1mm": 14.1,
           "precipitation_observed_days": 21.9,
           "low_ceiling_share": 0.626,
-          "star_nights": 4.4
+          "star_nights": 4.4,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 2,
@@ -233,7 +259,9 @@
           "wet_days_1mm": 11.9,
           "precipitation_observed_days": 17.5,
           "low_ceiling_share": 0.459,
-          "star_nights": 6.0
+          "star_nights": 6.0,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 3,
@@ -244,7 +272,9 @@
           "wet_days_1mm": 10.4,
           "precipitation_observed_days": 15.0,
           "low_ceiling_share": 0.318,
-          "star_nights": 11.2
+          "star_nights": 11.2,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 4,
@@ -255,7 +285,9 @@
           "wet_days_1mm": 8.1,
           "precipitation_observed_days": 11.8,
           "low_ceiling_share": 0.188,
-          "star_nights": 10.5
+          "star_nights": 10.5,
+          "ice_days": 0.9,
+          "beer_days": 0.0
         },
         {
           "month": 5,
@@ -266,7 +298,9 @@
           "wet_days_1mm": 9.0,
           "precipitation_observed_days": 12.6,
           "low_ceiling_share": 0.136,
-          "star_nights": 7.1
+          "star_nights": 7.1,
+          "ice_days": 3.9,
+          "beer_days": 0.5
         },
         {
           "month": 6,
@@ -277,7 +311,9 @@
           "wet_days_1mm": 8.6,
           "precipitation_observed_days": 12.2,
           "low_ceiling_share": 0.111,
-          "star_nights": 0.0
+          "star_nights": 0.0,
+          "ice_days": 11.6,
+          "beer_days": 4.6
         },
         {
           "month": 7,
@@ -288,7 +324,9 @@
           "wet_days_1mm": 10.2,
           "precipitation_observed_days": 13.8,
           "low_ceiling_share": 0.131,
-          "star_nights": 3.4
+          "star_nights": 3.4,
+          "ice_days": 10.6,
+          "beer_days": 5.0
         },
         {
           "month": 8,
@@ -299,7 +337,9 @@
           "wet_days_1mm": 8.8,
           "precipitation_observed_days": 11.8,
           "low_ceiling_share": 0.106,
-          "star_nights": 11.9
+          "star_nights": 11.9,
+          "ice_days": 13.1,
+          "beer_days": 7.1
         },
         {
           "month": 9,
@@ -310,7 +350,9 @@
           "wet_days_1mm": 6.8,
           "precipitation_observed_days": 10.8,
           "low_ceiling_share": 0.143,
-          "star_nights": 12.1
+          "star_nights": 12.1,
+          "ice_days": 6.9,
+          "beer_days": 1.9
         },
         {
           "month": 10,
@@ -321,7 +363,9 @@
           "wet_days_1mm": 11.8,
           "precipitation_observed_days": 15.8,
           "low_ceiling_share": 0.3,
-          "star_nights": 8.5
+          "star_nights": 8.5,
+          "ice_days": 0.2,
+          "beer_days": 0.0
         },
         {
           "month": 11,
@@ -332,7 +376,9 @@
           "wet_days_1mm": 9.1,
           "precipitation_observed_days": 16.8,
           "low_ceiling_share": 0.502,
-          "star_nights": 3.5
+          "star_nights": 3.5,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 12,
@@ -343,7 +389,9 @@
           "wet_days_1mm": 11.4,
           "precipitation_observed_days": 20.0,
           "low_ceiling_share": 0.616,
-          "star_nights": 3.4
+          "star_nights": 3.4,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         }
       ],
       "yearly": [

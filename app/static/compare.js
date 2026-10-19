@@ -360,6 +360,16 @@ function render(data) {
     1,
   );
 
+  for (const [id, key] of [["ice-chart", "ice_days"], ["beer-chart", "beer_days"]]) {
+    barChart(
+      document.getElementById(id),
+      MONTH_LABELS,
+      CITIES.map((city) => ({ label: city.label, values: monthly(data, city, key), className: city.key })),
+      "",
+      1,
+    );
+  }
+
   lineChart(
     document.getElementById("ceiling-chart"),
     MONTH_LABELS,

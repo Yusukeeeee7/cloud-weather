@@ -42,6 +42,9 @@ _TEMPERATURE_COLUMNS = {"metar": "metar_temperature_c", "reanalysis": "temperatu
 _MONTHS = range(1, 13)
 # 星空日和の夜：天文薄明（spec 5 の `/daylight`）の高度より下を暗い時間とし、
 # 雲量 25 % 未満を晴れとする。
+# アイス日和・ビール日和：気象庁の夏日・真夏日（日最高気温が 25 度・30 度以上の日）。
+SUMMER_DAY_C = 25.0
+MIDSUMMER_DAY_C = 30.0
 ASTRONOMICAL_DARK_DEG = -18.0
 STAR_CLEAR_COVER = 25.0
 
@@ -229,12 +232,52 @@ def monthly_precipitation_observed_days(observations: pd.DataFrame) -> pd.DataFr
 
     正時の観測（前後 30 分以内の 1 つ）のどれかで降水があった日。
     """
+    daily = _daily_precipitation_observed(observations)
+    return _average_days_per_year(daily, daily["observed"])
+
+
+def _daily_precipitation_observed(observations: pd.DataFrame) -> pd.DataFrame:
+    """現地の日ごとの「METAR で降水を観測したか」（そろった日だけ）。"""
     days = complete_days(observations)
     observed = days["weather_codes"].map(is_precipitation).astype("bool")
-    daily = (
+    return (
         observed.groupby([days["city"], days["local_date"]]).any().rename("observed").reset_index()
     )
-    return _average_days_per_year(daily, daily["observed"])
+
+
+def daily_max_temperature_c(observations: pd.DataFrame) -> pd.DataFrame:
+    """現地の日ごとの最高気温（METAR の正時の値の最大）。そろった日で、気温の欠けがない日だけ。"""
+    days = complete_days(observations)
+    values = days["metar_temperature_c"].astype("float64")
+    grouped = values.groupby([days["city"], days["local_date"]])
+    result = pd.DataFrame({"max_temperature_c": grouped.max(), "known": grouped.count()})
+    result = result[result["known"] == grouped.size()]
+    return result[["max_temperature_c"]].reset_index()
+
+
+def _daily_highs_and_precipitation(observations: pd.DataFrame) -> pd.DataFrame:
+    highs = daily_max_temperature_c(observations)
+    observed = _daily_precipitation_observed(observations)
+    return highs.merge(observed, on=["city", "local_date"], how="left")
+
+
+def monthly_ice_days(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとのアイス日和（このサイト独自の目安）の数の、年あたりの平均。
+
+    日最高気温（METAR）が 25 ℃以上（気象庁の夏日）で、降水を観測しなかった日。
+    """
+    daily = _daily_highs_and_precipitation(observations)
+    hot = daily["max_temperature_c"] >= SUMMER_DAY_C
+    return _average_days_per_year(daily, hot & ~daily["observed"].astype("bool"))
+
+
+def monthly_beer_days(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとのビール日和（このサイト独自の目安）の数の、年あたりの平均。
+
+    日最高気温（METAR）が 30 ℃以上（気象庁の真夏日）の日。
+    """
+    daily = daily_max_temperature_c(observations)
+    return _average_days_per_year(daily, daily["max_temperature_c"] >= MIDSUMMER_DAY_C)
 
 
 def _solar_elevation_deg(observations: pd.DataFrame) -> pd.Series:
@@ -333,6 +376,8 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
     observed = _lookup(monthly_precipitation_observed_days(observations), city, "month", "days")
     low = _lookup(monthly_low_ceiling_share(observations), city, "month", "share")
     star = _lookup(monthly_star_nights(observations), city, "month", "days")
+    ice = _lookup(monthly_ice_days(observations), city, "month", "days")
+    beer = _lookup(monthly_beer_days(observations), city, "month", "days")
     monthly = [
         {
             "month": month,
@@ -344,6 +389,8 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
             "precipitation_observed_days": _rounded(observed.get(month), 1),
             "low_ceiling_share": _rounded(low.get(month), 3),
             "star_nights": _rounded(star.get(month), 1),
+            "ice_days": _rounded(ice.get(month), 1),
+            "beer_days": _rounded(beer.get(month), 1),
         }
         for month in _MONTHS
     ]

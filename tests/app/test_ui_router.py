@@ -191,6 +191,18 @@ def test_compare_has_star_chart(client: TestClient) -> None:
     assert '"star_nights"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
 
 
+def test_compare_has_ice_and_beer_charts(client: TestClient) -> None:
+    # 追加 2 の⑦：アイス日和・ビール日和の棒グラフ。基準の出どころ（気象庁の夏日・真夏日）を書く。
+    text = client.get("/compare").text
+    script = (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+    assert 'id="ice-chart"' in text
+    assert 'id="beer-chart"' in text
+    assert "気象庁" in text
+    assert '"ice_days"' in script
+    assert '"beer_days"' in script
+
+
 def test_compare_has_wind_rose(client: TestClient) -> None:
     # 追加 2 の⑧：METAR の風の群から作る風配図（都市ごと）。
     text = client.get("/compare").text
@@ -244,6 +256,8 @@ def test_climate_json_matches_schema(city: str) -> None:
         assert -60 <= row["dew_point_c_metar"] <= row["temperature_c_metar"]
         assert 0 <= row["wind_speed_ms_reanalysis"] <= 30
         assert 0 <= row["star_nights"] <= 31
+        assert 0 <= row["ice_days"] <= 31
+        assert 0 <= row["beer_days"] <= 31
         assert 0 <= row["wet_days_1mm"] <= 31
         assert 0 <= row["precipitation_observed_days"] <= 31
         assert 0 <= row["low_ceiling_share"] <= 1
