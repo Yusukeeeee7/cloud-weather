@@ -123,6 +123,40 @@ def test_monthly_temperature_uses_local_month() -> None:
     assert _as_dict(result, "month", "temperature_c") == {2: 5.0}
 
 
+# 追加 2 の③：露点
+def test_monthly_dew_point_skips_missing() -> None:
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 3, metar_dew_point_c=[-2.0, 4.0, None]),
+        _hours("tokyo", "2025-02-10T00:00", 1, metar_dew_point_c=[7.5]),
+    )
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {1: 1.0, 2: 7.5}
+    assert set(result["city"]) == {"tokyo"}
+
+
+def test_monthly_dew_point_drops_month_without_values() -> None:
+    # 2 月の行はあるが、露点がすべて欠けている。0 ℃ ではなく、その月の値なし（JSON では null）。
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 1, metar_dew_point_c=[2.0]),
+        _hours("tokyo", "2025-02-10T00:00", 2, metar_dew_point_c=[None, None]),
+    )
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {1: 2.0}
+
+
+def test_monthly_dew_point_uses_local_month() -> None:
+    # UTC では 1 月 31 日 15 時、東京では 2 月 1 日 0 時。
+    table = _hours("tokyo", "2025-01-31T15:00", 1, metar_dew_point_c=[3.0])
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {2: 3.0}
+
+
 # 5
 def test_monthly_temperature_rejects_unknown_source() -> None:
     table = _hours("tokyo", "2025-01-10T00:00", 1, metar_temperature_c=[1.0], temperature_c=[1.0])
@@ -372,6 +406,7 @@ def test_yearly_wet_days_uses_threshold_boundary() -> None:
 def _summary_hours(city: str, start: str, count: int) -> pd.DataFrame:
     table = _layer_rows(city, start, [("XXXX 000000Z CAVOK", None, None)] * count)
     table["metar_temperature_c"] = 10.0
+    table["metar_dew_point_c"] = 4.0
     table["temperature_c"] = 11.0
     table["precipitation_mm"] = 0.0
     table["cloud_cover"] = 50.0
@@ -401,11 +436,13 @@ def test_climate_summary_keys() -> None:
             "month",
             "temperature_c_metar",
             "temperature_c_reanalysis",
+            "dew_point_c_metar",
             "wet_days_1mm",
             "precipitation_observed_days",
             "low_ceiling_share",
         }
         assert city["monthly"][0]["temperature_c_metar"] == 10.0
+        assert city["monthly"][0]["dew_point_c_metar"] == 4.0
         assert city["monthly"][0]["low_ceiling_share"] == 0.0
         # データのない月は null。
         assert city["monthly"][5]["temperature_c_metar"] is None

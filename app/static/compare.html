@@ -25,6 +25,12 @@
       <p class="note">実線は空港の観測（METAR）、破線は再解析（Open-Meteo）。2 つのずれの理由は調べていません（再解析は、広いマス目の平均です）。</p>
     </section>
 
+    <section class="card wide" aria-labelledby="dew-title">
+      <h2 id="dew-title">月ごとの平均の露点（℃）<span class="badge">実測</span></h2>
+      <svg id="dew-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均の露点"></svg>
+      <p class="note">露点は、空気中の水蒸気の量を表す温度です。高いほど水蒸気が多く、むしむしします。空港の観測（METAR）の正時の値の平均です。</p>
+    </section>
+
     <section class="card wide" aria-labelledby="yearly-title">
       <h2 id="yearly-title">年ごとの降水量（mm）<span class="badge">再解析</span></h2>
       <svg id="yearly-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="年ごとの降水量"></svg>

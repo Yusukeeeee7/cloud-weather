@@ -226,6 +226,14 @@ function render(data) {
     false,
   );
 
+  lineChart(
+    document.getElementById("dew-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "dew_point_c_metar"), className: city.key })),
+    "℃",
+    false,
+  );
+
   barChart(
     document.getElementById("yearly-chart"),
     years,

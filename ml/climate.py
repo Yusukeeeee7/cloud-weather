@@ -135,10 +135,19 @@ def monthly_temperature_c(observations: pd.DataFrame, source: TemperatureSource)
     """月ごとの平均気温。`source` は `metar`（実測）か `reanalysis`（再解析）。欠けた行は除く。"""
     if source not in _TEMPERATURE_COLUMNS:
         raise ValueError("source must be 'metar' or 'reanalysis'")
-    values = observations[_TEMPERATURE_COLUMNS[source]].astype("float64")
+    return _monthly_mean(observations, _TEMPERATURE_COLUMNS[source], "temperature_c")
+
+
+def monthly_dew_point_c(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの平均の露点（METAR、実測）。欠けた行は除く。"""
+    return _monthly_mean(observations, "metar_dew_point_c", "dew_point_c")
+
+
+def _monthly_mean(observations: pd.DataFrame, column: str, name: str) -> pd.DataFrame:
+    values = observations[column].astype("float64")
     months = _local_times(observations).dt.month
     means = values.groupby([observations["city"], months.rename("month")]).mean().dropna()
-    return means.rename("temperature_c").reset_index()
+    return means.rename(name).reset_index()
 
 
 def cloud_cover_share(observations: pd.DataFrame) -> pd.DataFrame:
@@ -227,6 +236,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
     reanalysis = _lookup(
         monthly_temperature_c(observations, "reanalysis"), city, "month", "temperature_c"
     )
+    dew = _lookup(monthly_dew_point_c(observations), city, "month", "dew_point_c")
     wet = _lookup(monthly_wet_days(observations), city, "month", "days")
     observed = _lookup(monthly_precipitation_observed_days(observations), city, "month", "days")
     low = _lookup(monthly_low_ceiling_share(observations), city, "month", "share")
@@ -235,6 +245,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
             "month": month,
             "temperature_c_metar": _rounded(metar.get(month), 1),
             "temperature_c_reanalysis": _rounded(reanalysis.get(month), 1),
+            "dew_point_c_metar": _rounded(dew.get(month), 1),
             "wet_days_1mm": _rounded(wet.get(month), 1),
             "precipitation_observed_days": _rounded(observed.get(month), 1),
             "low_ceiling_share": _rounded(low.get(month), 3),
