@@ -2,6 +2,8 @@
 
 import asyncio
 import copy
+import json
+import math
 from datetime import datetime, timedelta
 
 import httpx
@@ -136,6 +138,40 @@ def test_hourly_wind_direction_wrong_type_is_502(
     first = FIXED_NOW.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     raw["hourly"][ITEM][row_of(raw, first) + 5] = value
     mock_ok(open_meteo, raw)
+
+    response = client.get("/weather", params={"city": "tokyo"})
+
+    assert_error(response, 502, "upstream_error")
+
+
+def _mock_raw_json(open_meteo: respx.MockRouter, raw: RawForecast) -> respx.Route:
+    # json.dumps は既定で NaN・Infinity をそのまま書く（外部APIがそう返した場合の再現）。
+    body = json.dumps(raw).encode()
+    response = httpx.Response(200, content=body, headers={"Content-Type": "application/json"})
+    return open_meteo.get(FORECAST_URL).mock(return_value=response)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_current_wind_direction_not_finite_is_502(
+    client: TestClient, open_meteo: respx.MockRouter, value: float
+) -> None:
+    raw = load_forecast("tokyo")
+    raw["current"][ITEM] = value
+    _mock_raw_json(open_meteo, raw)
+
+    response = client.get("/weather", params={"city": "tokyo"})
+
+    assert_error(response, 502, "upstream_error")
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_hourly_wind_direction_not_finite_is_502(
+    client: TestClient, open_meteo: respx.MockRouter, value: float
+) -> None:
+    raw = load_forecast("tokyo")
+    first = FIXED_NOW.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    raw["hourly"][ITEM][row_of(raw, first) + 5] = value
+    _mock_raw_json(open_meteo, raw)
 
     response = client.get("/weather", params={"city": "tokyo"})
 

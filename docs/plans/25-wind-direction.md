@@ -125,3 +125,7 @@ Issue #58 から（spec.md の機能 25 の行に「今日の天気の風向き�
 - 「項目のない保存値」のテストを `seed_weather_cache` に替えたので、外部APIを呼ぶ回数の期待値が 2 から 1 になった（前は 1 回目が保存値を作るための `/weather` の呼び出しだった）。確かめること（TTL の内でも 1 回だけ呼び直し、その応答を保存する）は同じ。
 - `tests/app/test_cloud_base_router.py` の `_started_client` に、時計の時刻を渡す引数（既定は `CLOUD_BASE_NOW`）を足した。起動のテストで `/weather` を新しい組で通すため。
 - fixture の取り直しで `current.weather_code` が変わった（東京 2→51、ベルリン 0→2）。`test_service_classifies_fixture_weather_code` の期待値は、fixture の値と spec の「天気の分類」の表から読み替えた（drizzle・partly_cloudy）。
+- 計画のテスト一覧の D10（`test_weather_keys`）は、新しいテストではなく、既存のキーの集合（`tests/app/test_weather_router.py` の `CURRENT_KEYS`・`HOURLY_KEYS`）に `wind_direction_deg` を足した。一覧にないテストとして、fixture の単位の契約（`test_fixture_has_wind_direction_in_degrees`）と、ルーターを通した値の確認（`test_weather_returns_wind_direction`）を足した。
+- `/review` の指摘で、NaN・無限大の風向を 502 にした（`app/services/forecast.py` の `FiniteFloat`。`Field(allow_inf_nan=False)`）。受け付けると、応答で `null` になって 200 で返っていた（レビューでは 500 と見込んだが、テストを書いて実行すると 200 だった。pydantic の書き出しの既定）。人間の判断で風向だけに付け、ほかの項目は別の Issue にする（2026-10-19）。
+- 風向の注は、HTML に直接書かず、日差しの注と同じく JS（`renderHourly`）で出す形にした（`/weather` が失敗して表が空のとき・読み込み中に出さないため。`/review` の指摘）。
+- 8 方位に分ける JS の関数（`windSector`）は、spec の決まりで自動テストをしていない。境目（0・22.4・22.5・67.5・180・202・337.4・337.5・359・360）は node で 1 回計算して確かめた。

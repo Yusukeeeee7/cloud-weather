@@ -77,7 +77,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
     "relative_humidity": 68,
     "precipitation_mm": 0.0,
     "wind_speed_ms": 3.4,
-    "wind_direction_deg": 45,
+    "wind_direction_deg": 45.0,
     "cloud_cover": {"total": 50, "low": 40, "mid": 10, "high": 0}
   },
   "hourly": [
@@ -89,7 +89,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
       "precipitation_probability": 20,
       "precipitation_mm": 0.0,
       "wind_speed_ms": 2.8,
-      "wind_direction_deg": 50,
+      "wind_direction_deg": 50.0,
       "cloud_cover": {"total": 70, "low": 50, "mid": 20, "high": 0}
     }
   ],
@@ -121,7 +121,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
 - `current` の項目が Open-Meteo の応答に欠けている・null の場合は 502 `upstream_error`（一部だけ null で返さない。2026-10-12 決定）。
 - 機能ごとに段階的に追加する：#3 で `city`・`timezone`・`current`・`source`・`fetched_at`、#4 で `hourly`・`daily`、#5 で `cached`、#6 で `stale`（2026-10-12 決定）。未実装のキーは返さない。
 - `hourly` の `wind_speed_ms` は #25 の追加で足した（2026-10-19。Open-Meteo の `hourly=wind_speed_10m`、`wind_speed_unit=ms`。#12 から取得はしていた）。ほかの項目と同じく、返す範囲で欠けている・null なら 502。
-- `current`・`hourly` の `wind_direction_deg` は #58 で足した（2026-10-19。Open-Meteo の `wind_direction_10m` の値のまま。度、北 0・東 90、風の吹いてくる方向。7 の表「予報の風向」）。数値（小数も受ける）。範囲（0〜360）は確かめない（ほかの項目も範囲を見ていないため）。ほかの項目と同じく、`current` や返す範囲の `hourly` で欠けている・null・数値でないなら 502。風向のない保存値（#58 より前に保存されたもの）は、TTL の内でも使わずに外部APIを呼び直し、外部APIも失敗したら 502（stale として返さない）。`/cloud-base` などほかのエンドポイントの応答は変わらない。
+- `current`・`hourly` の `wind_direction_deg` は #58 で足した（2026-10-19。Open-Meteo の `wind_direction_10m` の値のまま。度、北 0・東 90、風の吹いてくる方向。7 の表「予報の風向」）。数値（小数も受ける。応答では `45.0` のように小数で返る）。範囲（0〜360）は確かめない（ほかの項目も範囲を見ていないため）。NaN・無限大は 502（受け付けると応答で `null` になり 200 で返るため。#58 のレビューで決定。いまは風向だけで、ほかの項目は別の Issue で扱う）。ほかの項目と同じく、`current` や返す範囲の `hourly` で欠けている・null・数値でないなら 502。風向のない保存値（#58 より前に保存されたもの）は、TTL の内でも使わずに外部APIを呼び直し、外部APIも失敗したら 502（stale として返さない）。`/cloud-base` などほかのエンドポイントの応答は変わらない。
 - `cached` は、キャッシュの値を返したとき `true`、外部APIから取得した値を返したとき `false`（#6 で「外部APIを呼ばずに」から書き直した。stale のときは外部APIを呼んだうえでキャッシュの値を返すため）。
   - キャッシュから返すときも、`fetched_at` は外部APIから取得した時刻のまま。`hourly` の 24 件は、返すたびにその時刻で選び直す（過ぎた時刻を先頭に残さない。2026-10-12 決定）。
 - `stale` は、外部APIが失敗し、TTL を過ぎた保存値を返したとき `true`。このとき `cached` も `true`。それ以外は常に `false`（2026-10-12 決定、#6）。

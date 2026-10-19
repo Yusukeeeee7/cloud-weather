@@ -13,6 +13,7 @@ from app.errors import UpstreamError
 from app.schemas import CloudCover, CurrentWeather, WeatherResponse
 from app.services.forecast import (
     INVALID_RESPONSE_ERRORS,
+    FiniteFloat,
     build_daily,
     build_hourly,
     from_unix,
@@ -43,7 +44,7 @@ class _RawCurrent(BaseModel):
     cloud_cover_mid: int
     cloud_cover_high: int
     wind_speed_10m: float
-    wind_direction_10m: float
+    wind_direction_10m: FiniteFloat
 
 
 class _CacheEntry(BaseModel):

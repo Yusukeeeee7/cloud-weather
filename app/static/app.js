@@ -294,6 +294,9 @@ function renderHourly(weather, cloudBaseForecast, sunshine) {
   const predictions = byTime(cloudBaseForecast);
   const sun = byTime(sunshine);
   renderSunshineNote(sunshine);
+  // 表を出すときだけ書く（/weather が失敗して表が空のとき・読み込み中は出さない）。
+  document.getElementById("wind-note").textContent =
+    "風向は風の吹いてくる方向です（Open-Meteo の予報）。矢印は風の流れていく向きです。";
   const note = document.getElementById("hourly-note");
   if (cloudBaseForecast.status === "fulfilled") {
     note.textContent =
@@ -667,6 +670,7 @@ function startLoading() {
   document.getElementById("history").hidden = true;
   document.getElementById("hourly-note").textContent = "";
   document.getElementById("sunshine-note").textContent = "";
+  document.getElementById("wind-note").textContent = "";
   showNotice("");
 }
 
