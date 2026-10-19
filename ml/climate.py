@@ -143,6 +143,11 @@ def monthly_dew_point_c(observations: pd.DataFrame) -> pd.DataFrame:
     return _monthly_mean(observations, "metar_dew_point_c", "dew_point_c")
 
 
+def monthly_wind_speed_ms(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの平均風速（再解析、m/s）。欠けた行は除く。"""
+    return _monthly_mean(observations, "wind_speed_ms", "wind_speed_ms")
+
+
 def _monthly_mean(observations: pd.DataFrame, column: str, name: str) -> pd.DataFrame:
     values = observations[column].astype("float64")
     months = _local_times(observations).dt.month
@@ -237,6 +242,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
         monthly_temperature_c(observations, "reanalysis"), city, "month", "temperature_c"
     )
     dew = _lookup(monthly_dew_point_c(observations), city, "month", "dew_point_c")
+    wind = _lookup(monthly_wind_speed_ms(observations), city, "month", "wind_speed_ms")
     wet = _lookup(monthly_wet_days(observations), city, "month", "days")
     observed = _lookup(monthly_precipitation_observed_days(observations), city, "month", "days")
     low = _lookup(monthly_low_ceiling_share(observations), city, "month", "share")
@@ -246,6 +252,7 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
             "temperature_c_metar": _rounded(metar.get(month), 1),
             "temperature_c_reanalysis": _rounded(reanalysis.get(month), 1),
             "dew_point_c_metar": _rounded(dew.get(month), 1),
+            "wind_speed_ms_reanalysis": _rounded(wind.get(month), 1),
             "wet_days_1mm": _rounded(wet.get(month), 1),
             "precipitation_observed_days": _rounded(observed.get(month), 1),
             "low_ceiling_share": _rounded(low.get(month), 3),

@@ -167,6 +167,14 @@ def test_compare_has_dew_point_chart(client: TestClient) -> None:
     assert '"dew_point_c_metar"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
 
 
+def test_compare_has_wind_speed_chart(client: TestClient) -> None:
+    # 追加 2 の④：月ごとの平均風速（再解析）の折れ線。
+    text = client.get("/compare").text
+
+    assert 'id="wind-chart"' in text
+    assert '"wind_speed_ms_reanalysis"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
 def test_compare_has_wet_total(client: TestClient) -> None:
     # 雨の日数のグラフの下に、1 年あたりの合計を出す欄。
     assert 'id="wet-total"' in client.get("/compare").text
@@ -210,6 +218,7 @@ def test_climate_json_matches_schema(city: str) -> None:
         assert -40 <= row["temperature_c_reanalysis"] <= 45
         # 露点は気温より高くならない（月の平均どうしでも）。
         assert -60 <= row["dew_point_c_metar"] <= row["temperature_c_metar"]
+        assert 0 <= row["wind_speed_ms_reanalysis"] <= 30
         assert 0 <= row["wet_days_1mm"] <= 31
         assert 0 <= row["precipitation_observed_days"] <= 31
         assert 0 <= row["low_ceiling_share"] <= 1

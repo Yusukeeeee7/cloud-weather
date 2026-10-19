@@ -157,6 +157,29 @@ def test_monthly_dew_point_uses_local_month() -> None:
     assert _as_dict(result, "month", "dew_point_c") == {2: 3.0}
 
 
+# 追加 2 の④：風速
+def test_monthly_wind_speed_skips_missing() -> None:
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 3, wind_speed_ms=[2.0, 5.0, None]),
+        _hours("tokyo", "2025-02-10T00:00", 1, wind_speed_ms=[4.5]),
+        _hours("tokyo", "2025-03-10T00:00", 1, wind_speed_ms=[None]),
+    )
+
+    result = climate.monthly_wind_speed_ms(table)
+
+    assert _as_dict(result, "month", "wind_speed_ms") == {1: 3.5, 2: 4.5}
+    assert set(result["city"]) == {"tokyo"}
+
+
+def test_monthly_wind_speed_uses_local_month() -> None:
+    # UTC では 1 月 31 日 15 時、東京では 2 月 1 日 0 時。
+    table = _hours("tokyo", "2025-01-31T15:00", 1, wind_speed_ms=[3.0])
+
+    result = climate.monthly_wind_speed_ms(table)
+
+    assert _as_dict(result, "month", "wind_speed_ms") == {2: 3.0}
+
+
 # 5
 def test_monthly_temperature_rejects_unknown_source() -> None:
     table = _hours("tokyo", "2025-01-10T00:00", 1, metar_temperature_c=[1.0], temperature_c=[1.0])
@@ -408,6 +431,7 @@ def _summary_hours(city: str, start: str, count: int) -> pd.DataFrame:
     table["metar_temperature_c"] = 10.0
     table["metar_dew_point_c"] = 4.0
     table["temperature_c"] = 11.0
+    table["wind_speed_ms"] = 3.0
     table["precipitation_mm"] = 0.0
     table["cloud_cover"] = 50.0
     table["weather_codes"] = None
@@ -437,12 +461,14 @@ def test_climate_summary_keys() -> None:
             "temperature_c_metar",
             "temperature_c_reanalysis",
             "dew_point_c_metar",
+            "wind_speed_ms_reanalysis",
             "wet_days_1mm",
             "precipitation_observed_days",
             "low_ceiling_share",
         }
         assert city["monthly"][0]["temperature_c_metar"] == 10.0
         assert city["monthly"][0]["dew_point_c_metar"] == 4.0
+        assert city["monthly"][0]["wind_speed_ms_reanalysis"] == 3.0
         assert city["monthly"][0]["low_ceiling_share"] == 0.0
         # データのない月は null。
         assert city["monthly"][5]["temperature_c_metar"] is None

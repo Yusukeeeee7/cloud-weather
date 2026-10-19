@@ -234,6 +234,14 @@ function render(data) {
     false,
   );
 
+  lineChart(
+    document.getElementById("wind-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "wind_speed_ms_reanalysis"), className: city.key })),
+    "m/s",
+    true,
+  );
+
   barChart(
     document.getElementById("yearly-chart"),
     years,

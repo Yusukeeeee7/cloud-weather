@@ -31,6 +31,12 @@
       <p class="note">露点は、空気中の水蒸気の量を表す温度です。高いほど水蒸気が多く、むしむしします。空港の観測（METAR）の正時の値の平均です。</p>
     </section>
 
+    <section class="card wide" aria-labelledby="wind-title">
+      <h2 id="wind-title">月ごとの平均風速（m/s）<span class="badge">再解析</span></h2>
+      <svg id="wind-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均風速"></svg>
+      <p class="note">Open-Meteo の過去データの風速（wind_speed_10m）の、1 時間ごとの値の平均です。</p>
+    </section>
+
     <section class="card wide" aria-labelledby="yearly-title">
       <h2 id="yearly-title">年ごとの降水量（mm）<span class="badge">再解析</span></h2>
       <svg id="yearly-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="年ごとの降水量"></svg>
