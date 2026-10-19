@@ -1,0 +1,323 @@
+{
+  "mode": "full",
+  "source": "data/processed/observations.parquet",
+  "period": {
+    "start": "2018-01-01",
+    "end": "2025-12-31",
+    "dates": "local"
+  },
+  "cities": {
+    "tokyo": {
+      "monthly": [
+        {
+          "month": 1,
+          "temperature_c_metar": 7.0,
+          "temperature_c_reanalysis": 4.8,
+          "wet_days_1mm": 5.9,
+          "precipitation_observed_days": 9.6,
+          "low_ceiling_share": 0.135
+        },
+        {
+          "month": 2,
+          "temperature_c_metar": 7.8,
+          "temperature_c_reanalysis": 6.0,
+          "wet_days_1mm": 6.4,
+          "precipitation_observed_days": 10.5,
+          "low_ceiling_share": 0.185
+        },
+        {
+          "month": 3,
+          "temperature_c_metar": 11.6,
+          "temperature_c_reanalysis": 10.1,
+          "wet_days_1mm": 12.6,
+          "precipitation_observed_days": 16.8,
+          "low_ceiling_share": 0.298
+        },
+        {
+          "month": 4,
+          "temperature_c_metar": 15.6,
+          "temperature_c_reanalysis": 14.3,
+          "wet_days_1mm": 11.6,
+          "precipitation_observed_days": 15.8,
+          "low_ceiling_share": 0.266
+        },
+        {
+          "month": 5,
+          "temperature_c_metar": 19.7,
+          "temperature_c_reanalysis": 18.6,
+          "wet_days_1mm": 13.4,
+          "precipitation_observed_days": 16.8,
+          "low_ceiling_share": 0.3
+        },
+        {
+          "month": 6,
+          "temperature_c_metar": 23.1,
+          "temperature_c_reanalysis": 22.3,
+          "wet_days_1mm": 14.8,
+          "precipitation_observed_days": 18.5,
+          "low_ceiling_share": 0.383
+        },
+        {
+          "month": 7,
+          "temperature_c_metar": 27.1,
+          "temperature_c_reanalysis": 26.3,
+          "wet_days_1mm": 16.4,
+          "precipitation_observed_days": 17.6,
+          "low_ceiling_share": 0.34
+        },
+        {
+          "month": 8,
+          "temperature_c_metar": 28.8,
+          "temperature_c_reanalysis": 28.0,
+          "wet_days_1mm": 12.5,
+          "precipitation_observed_days": 14.5,
+          "low_ceiling_share": 0.249
+        },
+        {
+          "month": 9,
+          "temperature_c_metar": 25.3,
+          "temperature_c_reanalysis": 24.5,
+          "wet_days_1mm": 14.6,
+          "precipitation_observed_days": 20.0,
+          "low_ceiling_share": 0.383
+        },
+        {
+          "month": 10,
+          "temperature_c_metar": 19.5,
+          "temperature_c_reanalysis": 18.3,
+          "wet_days_1mm": 12.5,
+          "precipitation_observed_days": 18.4,
+          "low_ceiling_share": 0.313
+        },
+        {
+          "month": 11,
+          "temperature_c_metar": 14.9,
+          "temperature_c_reanalysis": 13.0,
+          "wet_days_1mm": 8.4,
+          "precipitation_observed_days": 12.5,
+          "low_ceiling_share": 0.213
+        },
+        {
+          "month": 12,
+          "temperature_c_metar": 9.5,
+          "temperature_c_reanalysis": 7.3,
+          "wet_days_1mm": 7.0,
+          "precipitation_observed_days": 10.1,
+          "low_ceiling_share": 0.172
+        }
+      ],
+      "yearly": [
+        {
+          "year": 2018,
+          "precipitation_mm": 1432.7,
+          "complete_days": 364,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2019,
+          "precipitation_mm": 1839.8,
+          "complete_days": 365,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2020,
+          "precipitation_mm": 1667.5,
+          "complete_days": 366,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2021,
+          "precipitation_mm": 1853.2,
+          "complete_days": 365,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2022,
+          "precipitation_mm": 1626.6,
+          "complete_days": 365,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2023,
+          "precipitation_mm": 1319.8,
+          "complete_days": 365,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2024,
+          "precipitation_mm": 1668.9,
+          "complete_days": 366,
+          "metar_auto_share": 0.0
+        },
+        {
+          "year": 2025,
+          "precipitation_mm": 1316.0,
+          "complete_days": 365,
+          "metar_auto_share": 0.0
+        }
+      ],
+      "cloud_cover_share": {
+        "0-25": 0.318,
+        "25-50": 0.095,
+        "50-75": 0.077,
+        "75-100": 0.51
+      }
+    },
+    "berlin": {
+      "monthly": [
+        {
+          "month": 1,
+          "temperature_c_metar": 2.7,
+          "temperature_c_reanalysis": 2.6,
+          "wet_days_1mm": 14.1,
+          "precipitation_observed_days": 21.9,
+          "low_ceiling_share": 0.626
+        },
+        {
+          "month": 2,
+          "temperature_c_metar": 3.3,
+          "temperature_c_reanalysis": 3.1,
+          "wet_days_1mm": 11.9,
+          "precipitation_observed_days": 17.5,
+          "low_ceiling_share": 0.459
+        },
+        {
+          "month": 3,
+          "temperature_c_metar": 5.6,
+          "temperature_c_reanalysis": 5.4,
+          "wet_days_1mm": 10.4,
+          "precipitation_observed_days": 15.0,
+          "low_ceiling_share": 0.318
+        },
+        {
+          "month": 4,
+          "temperature_c_metar": 10.3,
+          "temperature_c_reanalysis": 10.0,
+          "wet_days_1mm": 8.1,
+          "precipitation_observed_days": 11.8,
+          "low_ceiling_share": 0.188
+        },
+        {
+          "month": 5,
+          "temperature_c_metar": 14.6,
+          "temperature_c_reanalysis": 14.4,
+          "wet_days_1mm": 9.0,
+          "precipitation_observed_days": 12.6,
+          "low_ceiling_share": 0.136
+        },
+        {
+          "month": 6,
+          "temperature_c_metar": 20.0,
+          "temperature_c_reanalysis": 19.9,
+          "wet_days_1mm": 8.6,
+          "precipitation_observed_days": 12.2,
+          "low_ceiling_share": 0.111
+        },
+        {
+          "month": 7,
+          "temperature_c_metar": 20.2,
+          "temperature_c_reanalysis": 20.1,
+          "wet_days_1mm": 10.2,
+          "precipitation_observed_days": 13.8,
+          "low_ceiling_share": 0.131
+        },
+        {
+          "month": 8,
+          "temperature_c_metar": 20.5,
+          "temperature_c_reanalysis": 20.6,
+          "wet_days_1mm": 8.8,
+          "precipitation_observed_days": 11.8,
+          "low_ceiling_share": 0.106
+        },
+        {
+          "month": 9,
+          "temperature_c_metar": 16.2,
+          "temperature_c_reanalysis": 16.3,
+          "wet_days_1mm": 6.8,
+          "precipitation_observed_days": 10.8,
+          "low_ceiling_share": 0.143
+        },
+        {
+          "month": 10,
+          "temperature_c_metar": 11.3,
+          "temperature_c_reanalysis": 11.6,
+          "wet_days_1mm": 11.8,
+          "precipitation_observed_days": 15.8,
+          "low_ceiling_share": 0.3
+        },
+        {
+          "month": 11,
+          "temperature_c_metar": 5.8,
+          "temperature_c_reanalysis": 6.0,
+          "wet_days_1mm": 9.1,
+          "precipitation_observed_days": 16.8,
+          "low_ceiling_share": 0.502
+        },
+        {
+          "month": 12,
+          "temperature_c_metar": 3.2,
+          "temperature_c_reanalysis": 3.3,
+          "wet_days_1mm": 11.4,
+          "precipitation_observed_days": 20.0,
+          "low_ceiling_share": 0.616
+        }
+      ],
+      "yearly": [
+        {
+          "year": 2018,
+          "precipitation_mm": 420.9,
+          "complete_days": 364,
+          "metar_auto_share": 0.002
+        },
+        {
+          "year": 2019,
+          "precipitation_mm": 531.9,
+          "complete_days": 365,
+          "metar_auto_share": 0.004
+        },
+        {
+          "year": 2020,
+          "precipitation_mm": 522.5,
+          "complete_days": 366,
+          "metar_auto_share": 0.004
+        },
+        {
+          "year": 2021,
+          "precipitation_mm": 692.4,
+          "complete_days": 365,
+          "metar_auto_share": 0.002
+        },
+        {
+          "year": 2022,
+          "precipitation_mm": 472.9,
+          "complete_days": 365,
+          "metar_auto_share": 0.455
+        },
+        {
+          "year": 2023,
+          "precipitation_mm": 800.5,
+          "complete_days": 365,
+          "metar_auto_share": 1.0
+        },
+        {
+          "year": 2024,
+          "precipitation_mm": 661.0,
+          "complete_days": 366,
+          "metar_auto_share": 1.0
+        },
+        {
+          "year": 2025,
+          "precipitation_mm": 538.5,
+          "complete_days": 365,
+          "metar_auto_share": 1.0
+        }
+      ],
+      "cloud_cover_share": {
+        "0-25": 0.252,
+        "25-50": 0.1,
+        "50-75": 0.088,
+        "75-100": 0.56
+      }
+    }
+  }
+}

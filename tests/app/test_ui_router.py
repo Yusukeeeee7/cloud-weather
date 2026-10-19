@@ -1,13 +1,16 @@
-"""#15 UI：`GET /` と、画面の静的ファイル。"""
+"""#15 UI：`GET /` と、画面の静的ファイル。#25 の `GET /compare` も。"""
 
+import json
+import math
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 STATIC_DIR = Path(__file__).resolve().parents[2] / "app" / "static"
-STATIC_FILES = ("index.html", "app.js", "style.css")
+STATIC_FILES = ("index.html", "app.js", "style.css", "compare.html", "compare.js")
 # 出典の表示（CC BY 4.0。spec.md 7 の表）。
 ATTRIBUTION_URL = "https://open-meteo.com/"
 # SVG の名前空間（要素を作るときの識別子で、通信先ではない）。
@@ -39,7 +42,12 @@ def test_root_loads_script_and_style_from_static(client: TestClient) -> None:
 
 @pytest.mark.parametrize(
     ("path", "content_type"),
-    [("/static/app.js", "javascript"), ("/static/style.css", "text/css")],
+    [
+        ("/static/app.js", "javascript"),
+        ("/static/style.css", "text/css"),
+        ("/static/compare.js", "javascript"),
+        ("/static/climate.json", "application/json"),
+    ],
 )
 def test_static_files_served(client: TestClient, path: str, content_type: str) -> None:
     response = client.get(path)
@@ -84,11 +92,103 @@ def test_static_has_no_external_hosts(name: str) -> None:
     assert urls <= {ATTRIBUTION_URL, SVG_NAMESPACE}
 
 
-def test_static_script_does_not_use_inner_html() -> None:
+@pytest.mark.parametrize("name", ["app.js", "compare.js"])
+def test_static_script_does_not_use_inner_html(name: str) -> None:
     # API の値は textContent で入れる（XSS 対策。計画「変更・追加するファイル」）。
-    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    script = (STATIC_DIR / name).read_text(encoding="utf-8")
 
     assert "innerHTML" not in script
     assert "outerHTML" not in script
     assert "insertAdjacentHTML" not in script
     assert "document.write" not in script
+
+
+# #25 気候の比較ページ（`GET /compare`）。
+CLIMATE_JSON = STATIC_DIR / "climate.json"
+CLIMATE_CITIES = {"tokyo", "berlin"}
+CLIMATE_YEARS = list(range(2018, 2026))
+
+
+def test_compare_returns_html(client: TestClient) -> None:
+    response = client.get("/compare")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'src="/static/compare.js"' in response.text
+    assert 'href="/static/style.css"' in response.text
+    assert 'href="/"' in response.text
+    assert f'href="{ATTRIBUTION_URL}"' in response.text
+
+
+def test_root_links_to_compare(client: TestClient) -> None:
+    assert 'href="/compare"' in client.get("/").text
+
+
+def test_compare_not_in_openapi(client: TestClient) -> None:
+    # 画面は API の一覧に載せない（DAST が取り込む道の数を変えない）。
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "/compare" not in paths
+    assert "/" not in paths
+
+
+def test_compare_script_reads_only_climate_json() -> None:
+    # 外部 API・ほかの API を呼ばず、同じオリジンの静的な JSON だけを読む。
+    script = (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+    assert '"/static/climate.json"' in script
+    assert script.count("fetch(") == 1
+
+
+def _climate() -> dict[str, Any]:
+    data: dict[str, Any] = json.loads(CLIMATE_JSON.read_text(encoding="utf-8"))
+    return data
+
+
+def test_climate_json_was_made_from_full_data() -> None:
+    data = _climate()
+
+    assert data["mode"] == "full"
+    assert data["source"] == "data/processed/observations.parquet"
+    assert data["period"] == {"start": "2018-01-01", "end": "2025-12-31", "dates": "local"}
+    assert set(data["cities"]) == CLIMATE_CITIES
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+
+
+@pytest.mark.parametrize("city", sorted(CLIMATE_CITIES))
+def test_climate_json_matches_schema(city: str) -> None:
+    data = _climate()["cities"][city]
+
+    monthly = data["monthly"]
+    assert [row["month"] for row in monthly] == list(range(1, 13))
+    for row in monthly:
+        assert all(_is_number(row[name]) for name in row)
+        assert -40 <= row["temperature_c_metar"] <= 45
+        assert -40 <= row["temperature_c_reanalysis"] <= 45
+        assert 0 <= row["wet_days_1mm"] <= 31
+        assert 0 <= row["precipitation_observed_days"] <= 31
+        assert 0 <= row["low_ceiling_share"] <= 1
+
+    yearly = data["yearly"]
+    assert [row["year"] for row in yearly] == CLIMATE_YEARS
+    for row in yearly:
+        assert all(_is_number(row[name]) for name in row)
+        assert row["precipitation_mm"] >= 0
+        assert 300 <= row["complete_days"] <= 366
+        assert 0 <= row["metar_auto_share"] <= 1
+
+    share = data["cloud_cover_share"]
+    assert list(share) == ["0-25", "25-50", "50-75", "75-100"]
+    assert all(_is_number(value) and 0 <= value <= 1 for value in share.values())
+    assert sum(share.values()) == pytest.approx(1, abs=0.002)
+
+
+def test_climate_json_has_no_local_paths() -> None:
+    text = CLIMATE_JSON.read_text(encoding="utf-8")
+
+    # "/tmp" は一時ファイルを使うのではなく、JSON に入っていないことを確かめる文字列。
+    for word in ("C:\\", "/home/", "/Users/", "/work", "/tmp"):  # noqa: S108
+        assert word not in text

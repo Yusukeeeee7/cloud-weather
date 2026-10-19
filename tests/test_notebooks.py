@@ -17,6 +17,11 @@ def test_data_fetch_notebook_exists() -> None:
     assert NOTEBOOKS_DIR / "01_data_fetch.ipynb" in STRIPPED
 
 
+def test_climate_notebook_exists() -> None:
+    # #25 の集計。出力は消してコミットする（成果物は app/static/climate.json）。
+    assert NOTEBOOKS_DIR / "09_climate.ipynb" in STRIPPED
+
+
 @pytest.mark.parametrize("path", STRIPPED, ids=lambda path: path.name)
 def test_notebook_has_no_outputs(path: Path) -> None:
     notebook = json.loads(path.read_text(encoding="utf-8"))
