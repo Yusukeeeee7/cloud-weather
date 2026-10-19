@@ -14,12 +14,13 @@ from tests.conftest import FORECAST_URL, RawForecast
 
 EXPECTED_CURRENT = (
     "temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,"
-    "weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m"
+    "weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,"
+    "wind_direction_10m"
 )
 EXPECTED_HOURLY = (
     "temperature_2m,precipitation_probability,precipitation,weather_code,"
     "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
-    "dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,"
+    "dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,wind_direction_10m,"
     "sunshine_duration,direct_radiation,diffuse_radiation"
 )
 EXPECTED_DAILY = (

@@ -10,13 +10,16 @@ from fastapi.testclient import TestClient
 
 from tests.app.cloud_base_fakes import expected_baseline_m, fake_model, row_of
 from tests.conftest import (
+    FIXED_NOW,
     FORECAST_URL,
     PAST_NOW,
     FakeClock,
     assert_error,
     iso,
+    load_forecast,
     load_past_forecast,
     mock_ok,
+    seed_weather_cache,
     without_past_hours,
 )
 
@@ -135,12 +138,14 @@ def test_history_uses_cache_within_ttl(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
     # /weather が保存した値を使う。TTL（15 分）ちょうどから呼び直す。
-    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
     weather = client.get("/weather", params={"city": "tokyo"})
-    clock.now = PAST_NOW + timedelta(minutes=14, seconds=59)
+    clock.now = FIXED_NOW + timedelta(minutes=14, seconds=59)
     hit = client.get("/cloud-history", params={"city": "tokyo"})
     calls_after_hit = route.call_count
-    clock.now = PAST_NOW + timedelta(minutes=15)
+    clock.now = FIXED_NOW + timedelta(minutes=15)
     miss = client.get("/cloud-history", params={"city": "tokyo"})
 
     assert (weather.status_code, hit.status_code, miss.status_code) == (200, 200, 200)
@@ -170,12 +175,11 @@ def test_history_selects_rows_again_when_served_from_cache(
 def test_history_refetches_when_cached_value_lacks_past_hours(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
+    # 過去の時間のない保存値は、/weather を通さずに保存先に入れる（/weather は風向が要る。#58）。
     raw = load_past_forecast("tokyo")
-    route = mock_ok(open_meteo, without_past_hours(raw))
-    weather = client.get("/weather", params={"city": "tokyo"})
-    assert (weather.status_code, route.call_count) == (200, 1)
+    seed_weather_cache(client, "tokyo", without_past_hours(raw), PAST_NOW)
+    route = mock_ok(open_meteo, raw)
 
-    route.mock(return_value=httpx.Response(200, json=raw))
     clock.now = PAST_NOW + timedelta(minutes=5)
     history = client.get("/cloud-history", params={"city": "tokyo"})
     again = client.get("/cloud-history", params={"city": "tokyo"})
@@ -184,16 +188,15 @@ def test_history_refetches_when_cached_value_lacks_past_hours(
     assert history.json()["hourly"][0]["time"] == iso(LATEST - timedelta(hours=23))
     # 呼び直した応答は保存され、次は外部APIを呼ばない。
     assert again.json() == history.json()
-    assert route.call_count == 2
+    assert route.call_count == 1
 
 
 def test_history_old_value_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = mock_ok(open_meteo, without_past_hours(load_past_forecast("tokyo")))
-    client.get("/weather", params={"city": "tokyo"})
+    seed_weather_cache(client, "tokyo", without_past_hours(load_past_forecast("tokyo")), PAST_NOW)
+    open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
 
-    route.mock(return_value=httpx.Response(500))
     clock.now = PAST_NOW + timedelta(minutes=5)
     response = client.get("/cloud-history", params={"city": "tokyo"})
 
@@ -237,8 +240,11 @@ def test_weather_and_cloud_base_unchanged_with_past_hours(
     from app.main import app
     from app.routers.cloud_base import get_cloud_base_model
 
-    raw = load_past_forecast(city)
+    # /weather は風向が要る（#58）ので、過去の時間と風向のある fixture とその取得時刻を使う。
+    raw = load_forecast(city)
     mock_ok(open_meteo, raw)
+    clock.now = FIXED_NOW
+    latest = FIXED_NOW.replace(minute=0, second=0, microsecond=0)
     fake, _ = fake_model(850.0)
     app.dependency_overrides[get_cloud_base_model] = lambda: fake
 
@@ -247,15 +253,15 @@ def test_weather_and_cloud_base_unchanged_with_past_hours(
 
     assert weather.status_code == 200
     hourly = weather.json()["hourly"]
-    # 現在（09:18Z）より後の最初の正時から 24 件。先頭の 24 行（過去）は使わない。
+    # 現在（21:11Z）より後の最初の正時から 24 件。先頭の 24 行（過去）は使わない。
     assert len(hourly) == 24
-    first = LATEST + timedelta(hours=1)
+    first = latest + timedelta(hours=1)
     assert hourly[0]["time"] == iso(first)
     assert hourly[0]["temperature_c"] == raw["hourly"]["temperature_2m"][row_of(raw, first)]
     assert len(weather.json()["daily"]) == 7
     assert cloud_base.status_code == 200
-    assert cloud_base.json()["valid_at"] == iso(LATEST)
-    assert cloud_base.json()["baseline_m"] == expected_baseline_m(raw, LATEST)
+    assert cloud_base.json()["valid_at"] == iso(latest)
+    assert cloud_base.json()["baseline_m"] == expected_baseline_m(raw, latest)
 
 
 # --- OpenAPI ---

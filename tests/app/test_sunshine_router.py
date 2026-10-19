@@ -10,14 +10,17 @@ from fastapi.testclient import TestClient
 
 from tests.app.cloud_base_fakes import row_of
 from tests.conftest import (
+    FIXED_NOW,
     FORECAST_URL,
     SUN_NOW,
     FakeClock,
     assert_error,
     iso,
+    load_forecast,
     load_past_forecast,
     load_sun_forecast,
     mock_ok,
+    seed_weather_cache,
 )
 
 RESPONSE_KEYS = {"city", "hourly"}
@@ -71,7 +74,9 @@ def test_sunshine_returns_spec_keys(
 def test_sunshine_times_match_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
 
     weather = client.get("/weather", params={"city": "tokyo"})
     sun = client.get("/sunshine", params={"city": "tokyo"})
@@ -123,13 +128,15 @@ def test_sunshine_upstream_failure_without_cache_is_502(
 def test_sunshine_shares_cache_with_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = mock_ok(open_meteo, load_sun_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
 
     weather = client.get("/weather", params={"city": "tokyo"})
-    clock.now = SUN_NOW + timedelta(minutes=14, seconds=59)
+    clock.now = FIXED_NOW + timedelta(minutes=14, seconds=59)
     hit = client.get("/sunshine", params={"city": "tokyo"})
     calls_within_ttl = route.call_count
-    clock.now = SUN_NOW + timedelta(minutes=15)
+    clock.now = FIXED_NOW + timedelta(minutes=15)
     miss = client.get("/sunshine", params={"city": "tokyo"})
 
     assert (weather.status_code, hit.status_code, miss.status_code) == (200, 200, 200)
@@ -141,12 +148,11 @@ def test_sunshine_refetches_when_cached_entry_lacks_items(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
     # 3 項目を足す前の形（過去 24 時間を含む fixture）が保存されている場合。
-    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
-    weather = client.get("/weather", params={"city": "tokyo"})
-    assert (weather.status_code, route.call_count) == (200, 1)
+    # /weather を通さずに保存先に入れる（/weather は風向が要る。#58）。
+    seed_weather_cache(client, "tokyo", load_past_forecast("tokyo"), SUN_NOW)
 
     raw = load_sun_forecast("tokyo")
-    route.mock(return_value=httpx.Response(200, json=raw))
+    route = mock_ok(open_meteo, raw)
     clock.now = SUN_NOW + timedelta(minutes=5)
     sun = client.get("/sunshine", params={"city": "tokyo"})
     again = client.get("/sunshine", params={"city": "tokyo"})
@@ -155,16 +161,16 @@ def test_sunshine_refetches_when_cached_entry_lacks_items(
     row = row_of(raw, FIRST)
     assert sun.json()["hourly"][0]["sunshine_s"] == raw["hourly"]["sunshine_duration"][row]
     assert again.json() == sun.json()
-    assert route.call_count == 2
+    # TTL の内の保存値を使わずに 1 回だけ呼び直し、その応答を保存する。
+    assert route.call_count == 1
 
 
 def test_sunshine_old_entry_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
-    client.get("/weather", params={"city": "tokyo"})
+    seed_weather_cache(client, "tokyo", load_past_forecast("tokyo"), SUN_NOW)
+    open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
 
-    route.mock(return_value=httpx.Response(500))
     clock.now = SUN_NOW + timedelta(minutes=5)
     response = client.get("/sunshine", params={"city": "tokyo"})
 
@@ -206,17 +212,19 @@ def test_sunshine_uses_stale_cache(
 def test_weather_unchanged_with_sunshine_items(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock, city: str
 ) -> None:
-    raw = load_sun_forecast(city)
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    raw = load_forecast(city)
     without = copy.deepcopy(raw)
     for item in ITEMS:
         del without["hourly"][item]
         del without["hourly_units"][item]
     route = mock_ok(open_meteo, raw)
+    clock.now = FIXED_NOW
     with_items = client.get("/weather", params={"city": city})
 
     # キャッシュを使わないように、TTL を過ぎてから 3 項目のない応答で取り直す。
     route.mock(return_value=httpx.Response(200, json=without))
-    clock.now = SUN_NOW + timedelta(minutes=15)
+    clock.now = FIXED_NOW + timedelta(minutes=15)
     without_items = client.get("/weather", params={"city": city})
 
     assert with_items.status_code == without_items.status_code == 200

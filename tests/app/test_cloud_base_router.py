@@ -24,11 +24,13 @@ from tests.app.cloud_base_fakes import (
 )
 from tests.conftest import (
     CLOUD_BASE_NOW,
+    FIXED_NOW,
     FORECAST_URL,
     LEGACY_NOW,
     FakeClock,
     RawForecast,
     load_cloud_base_forecast,
+    load_forecast,
     load_legacy_forecast,
     seed_weather_cache,
 )
@@ -196,11 +198,13 @@ def test_invalid_city_wins_over_model_unavailable(
     _assert_error(response, 422, "invalid_city")
 
 
-def _started_client(open_meteo: respx.MockRouter) -> Iterator[TestClient]:
+def _started_client(
+    open_meteo: respx.MockRouter, now: datetime = CLOUD_BASE_NOW
+) -> Iterator[TestClient]:
     from app.main import app
     from app.routers.weather import get_clock
 
-    app.dependency_overrides[get_clock] = lambda: lambda: CLOUD_BASE_NOW
+    app.dependency_overrides[get_clock] = lambda: lambda: now
     try:
         with TestClient(app) as started:
             yield started
@@ -222,10 +226,11 @@ def test_app_starts_without_model_and_other_endpoints_work(
         path.parent.mkdir()
         path.write_bytes(content)
     monkeypatch.setattr("app.services.cloud_base.MODEL_PATH", path)
-    route = _mock_ok(open_meteo, load_cloud_base_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = _mock_ok(open_meteo, load_forecast("tokyo"))
 
     with caplog.at_level(logging.WARNING):
-        for started in _started_client(open_meteo):
+        for started in _started_client(open_meteo, FIXED_NOW):
             health = started.get("/health")
             daylight = started.get("/daylight", params={"city": "berlin", "date": "2026-12-21"})
             weather = started.get("/weather", params={"city": "tokyo"})
@@ -335,12 +340,14 @@ def test_cloud_base_shares_cache_with_weather(
     city: str,
     order: tuple[str, str],
 ) -> None:
-    route = _mock_ok(open_meteo, load_cloud_base_forecast(city))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = _mock_ok(open_meteo, load_forecast(city))
+    clock.now = FIXED_NOW
     fake, _ = fake_model(850.0)
     _use_model(fake)
 
     first = client.get(order[0], params={"city": city})
-    clock.now = CLOUD_BASE_NOW + timedelta(minutes=5)
+    clock.now = FIXED_NOW + timedelta(minutes=5)
     second = client.get(order[1], params={"city": city})
 
     assert (first.status_code, second.status_code) == (200, 200)
@@ -357,12 +364,14 @@ def test_cloud_base_shares_redis_cache_with_weather(
 
     cache = RedisCache(fakeredis.FakeAsyncRedis(decode_responses=True))
     app.dependency_overrides[get_cache] = lambda: cache
-    route = _mock_ok(open_meteo, load_cloud_base_forecast("berlin"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = _mock_ok(open_meteo, load_forecast("berlin"))
+    clock.now = FIXED_NOW
     fake, _ = fake_model(850.0)
     _use_model(fake)
 
     first = client.get(order[0], params={"city": "berlin"})
-    clock.now = CLOUD_BASE_NOW + timedelta(minutes=5)
+    clock.now = FIXED_NOW + timedelta(minutes=5)
     second = client.get(order[1], params={"city": "berlin"})
 
     assert (first.status_code, second.status_code) == (200, 200)

@@ -14,7 +14,7 @@ from app.errors import UpstreamError
 from app.services import sunshine
 from app.services.forecast import MAX_HOURLY_ROWS, build_hourly
 from tests.app.cloud_base_fakes import row_of
-from tests.conftest import SUN_NOW, RawForecast, load_sun_forecast
+from tests.conftest import FIXED_NOW, SUN_NOW, RawForecast, load_forecast, load_sun_forecast
 
 ITEMS = ("sunshine_duration", "direct_radiation", "diffuse_radiation")
 # SUN_NOW（2026-10-14T12:21Z）より後の最初の正時。
@@ -37,15 +37,16 @@ def _build(raw: RawForecast, now: datetime = SUN_NOW) -> Any:
 @pytest.mark.parametrize(
     "now",
     [
-        SUN_NOW,
-        datetime(2026, 10, 14, 13, 0, tzinfo=UTC),
-        datetime(2026, 10, 14, 12, 59, 59, 999999, tzinfo=UTC),
+        FIXED_NOW,
+        datetime(2026, 10, 19, 22, 0, tzinfo=UTC),
+        datetime(2026, 10, 19, 21, 59, 59, 999999, tzinfo=UTC),
     ],
     ids=["fixture", "on-the-hour", "just-before"],
 )
 @pytest.mark.parametrize("city", CITIES)
 def test_sunshine_times_match_weather_hourly(city: City, now: datetime) -> None:
-    raw = load_sun_forecast(city.value)
+    # /weather の hourly は風向が要る（#58）ので、風向のある fixture とその取得時刻のまわりを使う。
+    raw = load_forecast(city.value)
 
     response = sunshine.build_sunshine_response(city, raw, now)
 

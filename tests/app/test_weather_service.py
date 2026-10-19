@@ -21,6 +21,7 @@ REQUIRED_FIELDS = [
     "cloud_cover_mid",
     "cloud_cover_high",
     "wind_speed_10m",
+    "wind_direction_10m",
 ]
 
 
@@ -149,8 +150,9 @@ def test_service_unknown_weather_code(forecast: Callable[[str], RawForecast]) ->
 
 
 def test_service_classifies_fixture_weather_code(forecast: Callable[[str], RawForecast]) -> None:
-    # 保存時の東京は weather_code 2（partly_cloudy）、ベルリンは 0（clear）。承認済みの表のとおり。
-    expected = {City.TOKYO: "partly_cloudy", City.BERLIN: "clear"}
+    # 保存時の東京は weather_code 51（drizzle）、ベルリンは 2（partly_cloudy）。
+    # 承認済みの表のとおり。
+    expected = {City.TOKYO: "drizzle", City.BERLIN: "partly_cloudy"}
     for city, category in expected.items():
         response = build_weather_response(city, forecast(city.value), FIXED_NOW)
         assert response.current.weather == category
