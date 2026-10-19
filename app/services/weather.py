@@ -28,7 +28,8 @@ class _RawCurrent(BaseModel):
     """Open-Meteo の current のうち、使う項目。欠けている・null・型違いは検証で落とす。"""
 
     # 数値の文字列や真偽値を数値として受け付けない。
-    model_config = ConfigDict(strict=True)
+    # NaN・無限大も受け付けない（受け付けると、応答で null になって 200 で返る。#58）。
+    model_config = ConfigDict(strict=True, allow_inf_nan=False)
 
     # UNIX 秒（timeformat=unixtime）。
     time: int
@@ -43,6 +44,7 @@ class _RawCurrent(BaseModel):
     cloud_cover_mid: int
     cloud_cover_high: int
     wind_speed_10m: float
+    wind_direction_10m: float
 
 
 class _CacheEntry(BaseModel):
@@ -109,6 +111,7 @@ def build_weather_response(
             relative_humidity=current.relative_humidity_2m,
             precipitation_mm=current.precipitation,
             wind_speed_ms=current.wind_speed_10m,
+            wind_direction_deg=current.wind_direction_10m,
             cloud_cover=CloudCover(
                 total=current.cloud_cover,
                 low=current.cloud_cover_low,

@@ -18,12 +18,14 @@ from tests.app.cloud_base_fakes import (
     use_model,
 )
 from tests.conftest import (
+    FIXED_NOW,
     FORECAST_URL,
     PAST_NOW,
     FakeClock,
     RawForecast,
     assert_error,
     iso,
+    load_forecast,
     load_past_forecast,
     mock_ok,
     seed_weather_cache,
@@ -92,7 +94,9 @@ def test_forecast_returns_spec_keys_with_committed_model(
 def test_forecast_times_match_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    mock_ok(open_meteo, load_past_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
     fake, _ = fake_model(850.0)
     use_model(fake)
 
@@ -181,15 +185,17 @@ def test_forecast_upstream_failure_without_cache_is_502(
 def test_forecast_shares_cache_with_weather(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock, order: tuple[str, str]
 ) -> None:
-    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
     fake, _ = fake_model(850.0)
     use_model(fake)
 
     first = client.get(order[0], params={"city": "tokyo"})
-    clock.now = PAST_NOW + timedelta(minutes=14, seconds=59)
+    clock.now = FIXED_NOW + timedelta(minutes=14, seconds=59)
     second = client.get(order[1], params={"city": "tokyo"})
     calls_within_ttl = route.call_count
-    clock.now = PAST_NOW + timedelta(minutes=15)
+    clock.now = FIXED_NOW + timedelta(minutes=15)
     third = client.get("/cloud-base/forecast", params={"city": "tokyo"})
 
     assert (first.status_code, second.status_code, third.status_code) == (200, 200, 200)

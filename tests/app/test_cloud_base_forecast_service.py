@@ -21,7 +21,7 @@ from tests.app.cloud_base_fakes import (
     sequence_model,
     training_features,
 )
-from tests.conftest import PAST_NOW, RawForecast, load_past_forecast
+from tests.conftest import FIXED_NOW, PAST_NOW, RawForecast, load_forecast, load_past_forecast
 
 # PAST_NOW（2026-10-14T09:18Z）より後の最初の正時。
 FIRST = datetime(2026, 10, 14, 10, 0, tzinfo=UTC)
@@ -45,16 +45,17 @@ def _with_value(raw: RawForecast, item: str, at: datetime, value: Any) -> RawFor
 @pytest.mark.parametrize(
     "now",
     [
-        PAST_NOW,
-        datetime(2026, 10, 14, 10, 0, tzinfo=UTC),
-        datetime(2026, 10, 14, 9, 59, 59, 999999, tzinfo=UTC),
-        datetime(2026, 10, 14, 10, 0, 0, 1, tzinfo=UTC),
+        FIXED_NOW,
+        datetime(2026, 10, 19, 22, 0, tzinfo=UTC),
+        datetime(2026, 10, 19, 21, 59, 59, 999999, tzinfo=UTC),
+        datetime(2026, 10, 19, 22, 0, 0, 1, tzinfo=UTC),
     ],
     ids=["fixture", "on-the-hour", "just-before", "just-after"],
 )
 @pytest.mark.parametrize("city", CITIES)
 def test_forecast_times_match_weather_hourly(city: City, now: datetime) -> None:
-    raw = load_past_forecast(city.value)
+    # /weather の hourly は風向が要る（#58）ので、風向のある fixture とその取得時刻のまわりを使う。
+    raw = load_forecast(city.value)
     fake, _ = fake_model(850.0)
 
     response = cloud_base_forecast.build_cloud_base_forecast_response(city, raw, now, fake)

@@ -24,6 +24,8 @@ class CurrentWeather(BaseModel):
     relative_humidity: int
     precipitation_mm: float
     wind_speed_ms: float
+    # 度（北 0・東 90）。風の吹いてくる方向。
+    wind_direction_deg: float
     cloud_cover: CloudCover
 
 
@@ -35,6 +37,7 @@ class HourlyForecast(BaseModel):
     precipitation_probability: int
     precipitation_mm: float
     wind_speed_ms: float
+    wind_direction_deg: float
     cloud_cover: CloudCover
 
 

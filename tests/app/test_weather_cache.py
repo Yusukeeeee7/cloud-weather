@@ -223,18 +223,18 @@ def test_service_hit_reselects_hourly_by_now(
     raw = forecast("tokyo")
     route = _mock_ok(open_meteo, raw)
     cache = MemoryCache()
-    fetched_at = datetime(2026, 10, 19, 18, 55, tzinfo=UTC)
+    fetched_at = datetime(2026, 10, 19, 21, 55, tzinfo=UTC)
     clock = FakeClock(fetched_at)
     miss = _call(City.TOKYO, clock, cache)
 
-    clock.now = datetime(2026, 10, 19, 19, 5, tzinfo=UTC)
+    clock.now = datetime(2026, 10, 19, 22, 5, tzinfo=UTC)
     hit = _call(City.TOKYO, clock, cache)
 
     assert route.call_count == 1
     assert hit.cached is True
     assert hit.fetched_at == fetched_at
-    assert miss.hourly[0].time == datetime(2026, 10, 19, 19, 0, tzinfo=UTC)
-    assert hit.hourly[0].time == datetime(2026, 10, 19, 20, 0, tzinfo=UTC)
+    assert miss.hourly[0].time == datetime(2026, 10, 19, 22, 0, tzinfo=UTC)
+    assert hit.hourly[0].time == datetime(2026, 10, 19, 23, 0, tzinfo=UTC)
     assert len(hit.hourly) == 24
     assert hit.hourly[:23] == miss.hourly[1:]
     # 値は fixture の同じ時刻の行。
@@ -348,9 +348,9 @@ def test_service_entry_invalid_at_now_is_refetched(
 ) -> None:
     # 取得時は返さない範囲（25 件目）にあった null が、正時をまたいで返す範囲に入る場合。
     good = forecast("tokyo")
-    fetched_at = datetime(2026, 10, 19, 18, 55, tzinfo=UTC)
+    fetched_at = datetime(2026, 10, 19, 21, 55, tzinfo=UTC)
     first_row = good["hourly"]["time"].index(
-        int(datetime(2026, 10, 19, 19, tzinfo=UTC).timestamp())
+        int(datetime(2026, 10, 19, 22, tzinfo=UTC).timestamp())
     )
     with_null = copy.deepcopy(good)
     with_null["hourly"]["temperature_2m"][first_row + 24] = None
@@ -361,7 +361,7 @@ def test_service_entry_invalid_at_now_is_refetched(
     clock = FakeClock(fetched_at)
     first = _call(City.TOKYO, clock, cache)
 
-    refetched_at = datetime(2026, 10, 19, 19, 5, tzinfo=UTC)
+    refetched_at = datetime(2026, 10, 19, 22, 5, tzinfo=UTC)
     clock.now = refetched_at
     second = _call(City.TOKYO, clock, cache)
 

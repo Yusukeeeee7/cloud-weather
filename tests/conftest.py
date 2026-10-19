@@ -15,11 +15,15 @@ from app.cities import City
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-# `/weather` の fixture（いまの取得と同じ URL。#25 の追加で取り直した）を取得した時刻
-# （2 都市とも 2026-10-19T18:25:57Z〜18:25:58Z）の直後にする。
+# `/weather` の fixture（いまの取得と同じ URL。#58 で風向を足して取り直した）を取得した時刻
+# （2 都市とも 2026-10-19T21:11:07Z〜21:11:08Z）の直後にする。
 # hourly の 24 件は時計に依存するため、fixture を取り直したらここも変える。
 # 秒未満を含む時刻にして、レスポンスで切り捨てられることも確かめられるようにする。
-FIXED_NOW = datetime(2026, 10, 19, 18, 26, 0, 123456, tzinfo=UTC)
+FIXED_NOW = datetime(2026, 10, 19, 21, 11, 10, 123456, tzinfo=UTC)
+
+# 風向を足す前の `/weather` の fixture（#25 の追加）を取得した時刻
+# （2026-10-19T18:25:57Z〜18:25:58Z）の直後。「風向のない保存値」のテストに使う。
+WIND_NOW = datetime(2026, 10, 19, 18, 26, 0, 123456, tzinfo=UTC)
 
 # #12 より前の形の fixture（hourly に 4 項目がない）を取得した時刻（2026-10-12T15:02:12Z）の直後。
 # 「4 項目のない保存値」のテストに使う。
@@ -55,11 +59,16 @@ def _load(name: str) -> RawForecast:
 
 
 def load_forecast(city: str) -> RawForecast:
-    return _load(f"forecast_{city}_wind.json")
+    return _load(f"forecast_{city}_direction.json")
 
 
 def load_forecast_iso8601(city: str) -> RawForecast:
-    return _load(f"forecast_{city}_wind_iso8601.json")
+    return _load(f"forecast_{city}_direction_iso8601.json")
+
+
+def load_wind_forecast(city: str) -> RawForecast:
+    """風向を足す前の形（current・hourly に `wind_direction_10m` がない）。"""
+    return _load(f"forecast_{city}_wind.json")
 
 
 def load_legacy_forecast(city: str) -> RawForecast:

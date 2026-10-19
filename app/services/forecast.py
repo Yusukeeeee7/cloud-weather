@@ -22,7 +22,8 @@ INVALID_RESPONSE_ERRORS = (ValidationError, ValueError, OverflowError, OSError)
 
 class _Strict(BaseModel):
     # 数値の文字列や真偽値を数値として受け付けない。
-    model_config = ConfigDict(strict=True)
+    # NaN・無限大も受け付けない（受け付けると、応答で null になって 200 で返る。#58）。
+    model_config = ConfigDict(strict=True, allow_inf_nan=False)
 
 
 class _RawHourly(_Strict):
@@ -38,6 +39,7 @@ class _RawHourly(_Strict):
     cloud_cover_mid: list[int]
     cloud_cover_high: list[int]
     wind_speed_10m: list[float]
+    wind_direction_10m: list[float]
 
 
 class _RawDaily(_Strict):
@@ -142,6 +144,7 @@ def build_hourly(raw: Mapping[str, Any], now: datetime) -> list[HourlyForecast]:
             precipitation_probability=hourly.precipitation_probability[row],
             precipitation_mm=hourly.precipitation[row],
             wind_speed_ms=hourly.wind_speed_10m[row],
+            wind_direction_deg=hourly.wind_direction_10m[row],
             cloud_cover=CloudCover(
                 total=hourly.cloud_cover[row],
                 low=hourly.cloud_cover_low[row],

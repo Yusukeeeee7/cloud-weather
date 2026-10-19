@@ -18,13 +18,16 @@ from tests.app.cloud_base_fakes import (
     use_model,
 )
 from tests.conftest import (
+    FIXED_NOW,
     FORECAST_URL,
     PAST_NOW,
     FakeClock,
     assert_error,
     iso,
+    load_forecast,
     load_past_forecast,
     mock_ok,
+    seed_weather_cache,
     without_past_hours,
 )
 
@@ -165,15 +168,17 @@ def test_history_upstream_failure_without_cache_is_502(
 def test_history_shares_cache(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock, first_path: str
 ) -> None:
-    route = mock_ok(open_meteo, load_past_forecast("tokyo"))
+    # /weather は風向が要る（#58）ので、風向のある fixture とその取得時刻を使う。
+    route = mock_ok(open_meteo, load_forecast("tokyo"))
+    clock.now = FIXED_NOW
     fake, _ = fake_model(850.0)
     use_model(fake)
 
     first = client.get(first_path, params={"city": "tokyo"})
-    clock.now = PAST_NOW + timedelta(minutes=14, seconds=59)
+    clock.now = FIXED_NOW + timedelta(minutes=14, seconds=59)
     hit = client.get("/cloud-base/history", params={"city": "tokyo"})
     calls_within_ttl = route.call_count
-    clock.now = PAST_NOW + timedelta(minutes=15)
+    clock.now = FIXED_NOW + timedelta(minutes=15)
     miss = client.get("/cloud-base/history", params={"city": "tokyo"})
 
     assert (first.status_code, hit.status_code, miss.status_code) == (200, 200, 200)
@@ -184,14 +189,13 @@ def test_history_shares_cache(
 def test_history_refetches_when_cached_value_lacks_past_hours(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
+    # 過去の時間のない保存値は、/weather を通さずに保存先に入れる（/weather は風向が要る。#58）。
     raw = load_past_forecast("tokyo")
-    route = mock_ok(open_meteo, without_past_hours(raw))
+    seed_weather_cache(client, "tokyo", without_past_hours(raw), PAST_NOW)
+    route = mock_ok(open_meteo, raw)
     fake, _ = fake_model(850.0)
     use_model(fake)
-    weather = client.get("/weather", params={"city": "tokyo"})
-    assert (weather.status_code, route.call_count) == (200, 1)
 
-    route.mock(return_value=httpx.Response(200, json=raw))
     clock.now = PAST_NOW + timedelta(minutes=5)
     history = client.get("/cloud-base/history", params={"city": "tokyo"})
     again = client.get("/cloud-base/history", params={"city": "tokyo"})
@@ -199,18 +203,18 @@ def test_history_refetches_when_cached_value_lacks_past_hours(
     assert history.status_code == 200
     assert history.json()["hourly"][0]["time"] == iso(FIRST)
     assert again.json() == history.json()
-    assert route.call_count == 2
+    # TTL の内の保存値を使わずに 1 回だけ呼び直し、その応答を保存する。
+    assert route.call_count == 1
 
 
 def test_history_old_value_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter, clock: FakeClock
 ) -> None:
-    route = mock_ok(open_meteo, without_past_hours(load_past_forecast("tokyo")))
+    seed_weather_cache(client, "tokyo", without_past_hours(load_past_forecast("tokyo")), PAST_NOW)
+    open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
     fake, _ = fake_model(850.0)
     use_model(fake)
-    client.get("/weather", params={"city": "tokyo"})
 
-    route.mock(return_value=httpx.Response(500))
     clock.now = PAST_NOW + timedelta(minutes=5)
     response = client.get("/cloud-base/history", params={"city": "tokyo"})
 
