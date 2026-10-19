@@ -707,7 +707,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 完了（2026-10-16。PR の CI で 3 つの手順が成功） |
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 実装済み（PR の CI と、main へのマージ後の CD の実行で確認） |
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 完了（2026-10-16。main へのマージ後の CD で来歴と SBOM が付き、手元からの検証が成功。記録は `docs/provenance.md`） |
-| 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 実装済み（main へのマージ後の CD の実行で確認。初回の結果は手元で High 0 件、`docs/dast.md`） |
+| 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 完了（2026-10-17。main へのマージ後の CD（run 38974879281）で DAST の手順が成功し、push された。取り込んだ URL 11、High 0 件。記録は `docs/dast.md`） |
 | 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 未着手 |
 
 #16・#17 は、#13・#14 より先に進める（2026-10-13 に変更。それまでは「#13・#14 の後」としていた）。決まりは「9. モデルの改善」。
