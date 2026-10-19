@@ -13,97 +13,157 @@
           "month": 1,
           "temperature_c_metar": 7.0,
           "temperature_c_reanalysis": 4.8,
+          "dew_point_c_metar": -2.2,
+          "wind_speed_ms_reanalysis": 4.6,
           "wet_days_1mm": 5.9,
           "precipitation_observed_days": 9.6,
-          "low_ceiling_share": 0.135
+          "low_ceiling_share": 0.135,
+          "star_nights": 16.9,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 2,
           "temperature_c_metar": 7.8,
           "temperature_c_reanalysis": 6.0,
+          "dew_point_c_metar": -1.5,
+          "wind_speed_ms_reanalysis": 4.9,
           "wet_days_1mm": 6.4,
           "precipitation_observed_days": 10.5,
-          "low_ceiling_share": 0.185
+          "low_ceiling_share": 0.185,
+          "star_nights": 10.9,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 3,
           "temperature_c_metar": 11.6,
           "temperature_c_reanalysis": 10.1,
+          "dew_point_c_metar": 4.7,
+          "wind_speed_ms_reanalysis": 5.2,
           "wet_days_1mm": 12.6,
           "precipitation_observed_days": 16.8,
-          "low_ceiling_share": 0.298
+          "low_ceiling_share": 0.298,
+          "star_nights": 10.4,
+          "ice_days": 0.2,
+          "beer_days": 0.0
         },
         {
           "month": 4,
           "temperature_c_metar": 15.6,
           "temperature_c_reanalysis": 14.3,
+          "dew_point_c_metar": 9.3,
+          "wind_speed_ms_reanalysis": 5.2,
           "wet_days_1mm": 11.6,
           "precipitation_observed_days": 15.8,
-          "low_ceiling_share": 0.266
+          "low_ceiling_share": 0.266,
+          "star_nights": 10.1,
+          "ice_days": 1.5,
+          "beer_days": 0.0
         },
         {
           "month": 5,
           "temperature_c_metar": 19.7,
           "temperature_c_reanalysis": 18.6,
+          "dew_point_c_metar": 14.5,
+          "wind_speed_ms_reanalysis": 5.0,
           "wet_days_1mm": 13.4,
           "precipitation_observed_days": 16.8,
-          "low_ceiling_share": 0.3
+          "low_ceiling_share": 0.3,
+          "star_nights": 6.6,
+          "ice_days": 7.1,
+          "beer_days": 0.5
         },
         {
           "month": 6,
           "temperature_c_metar": 23.1,
           "temperature_c_reanalysis": 22.3,
+          "dew_point_c_metar": 19.3,
+          "wind_speed_ms_reanalysis": 4.3,
           "wet_days_1mm": 14.8,
           "precipitation_observed_days": 18.5,
-          "low_ceiling_share": 0.383
+          "low_ceiling_share": 0.383,
+          "star_nights": 5.6,
+          "ice_days": 10.6,
+          "beer_days": 5.1
         },
         {
           "month": 7,
           "temperature_c_metar": 27.1,
           "temperature_c_reanalysis": 26.3,
+          "dew_point_c_metar": 23.3,
+          "wind_speed_ms_reanalysis": 4.7,
           "wet_days_1mm": 16.4,
           "precipitation_observed_days": 17.6,
-          "low_ceiling_share": 0.34
+          "low_ceiling_share": 0.34,
+          "star_nights": 6.8,
+          "ice_days": 13.0,
+          "beer_days": 20.0
         },
         {
           "month": 8,
           "temperature_c_metar": 28.8,
           "temperature_c_reanalysis": 28.0,
+          "dew_point_c_metar": 24.5,
+          "wind_speed_ms_reanalysis": 4.8,
           "wet_days_1mm": 12.5,
           "precipitation_observed_days": 14.5,
-          "low_ceiling_share": 0.249
+          "low_ceiling_share": 0.249,
+          "star_nights": 9.0,
+          "ice_days": 16.4,
+          "beer_days": 26.6
         },
         {
           "month": 9,
           "temperature_c_metar": 25.3,
           "temperature_c_reanalysis": 24.5,
+          "dew_point_c_metar": 21.6,
+          "wind_speed_ms_reanalysis": 4.6,
           "wet_days_1mm": 14.6,
           "precipitation_observed_days": 20.0,
-          "low_ceiling_share": 0.383
+          "low_ceiling_share": 0.383,
+          "star_nights": 6.6,
+          "ice_days": 9.4,
+          "beer_days": 10.6
         },
         {
           "month": 10,
           "temperature_c_metar": 19.5,
           "temperature_c_reanalysis": 18.3,
+          "dew_point_c_metar": 14.5,
+          "wind_speed_ms_reanalysis": 4.6,
           "wet_days_1mm": 12.5,
           "precipitation_observed_days": 18.4,
-          "low_ceiling_share": 0.313
+          "low_ceiling_share": 0.313,
+          "star_nights": 9.4,
+          "ice_days": 4.1,
+          "beer_days": 0.6
         },
         {
           "month": 11,
           "temperature_c_metar": 14.9,
           "temperature_c_reanalysis": 13.0,
+          "dew_point_c_metar": 8.3,
+          "wind_speed_ms_reanalysis": 4.1,
           "wet_days_1mm": 8.4,
           "precipitation_observed_days": 12.5,
-          "low_ceiling_share": 0.213
+          "low_ceiling_share": 0.213,
+          "star_nights": 12.4,
+          "ice_days": 0.4,
+          "beer_days": 0.0
         },
         {
           "month": 12,
           "temperature_c_metar": 9.5,
           "temperature_c_reanalysis": 7.3,
+          "dew_point_c_metar": 1.4,
+          "wind_speed_ms_reanalysis": 4.0,
           "wet_days_1mm": 7.0,
           "precipitation_observed_days": 10.1,
-          "low_ceiling_share": 0.172
+          "low_ceiling_share": 0.172,
+          "star_nights": 13.0,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         }
       ],
       "yearly": [
@@ -161,6 +221,18 @@
         "25-50": 0.095,
         "50-75": 0.077,
         "75-100": 0.51
+      },
+      "wet_days_1mm_per_year": 136.0,
+      "wind_direction_share": {
+        "N": 0.259,
+        "NE": 0.14,
+        "E": 0.113,
+        "SE": 0.06,
+        "S": 0.234,
+        "SW": 0.052,
+        "W": 0.036,
+        "NW": 0.079,
+        "calm_variable": 0.027
       }
     },
     "berlin": {
@@ -169,97 +241,157 @@
           "month": 1,
           "temperature_c_metar": 2.7,
           "temperature_c_reanalysis": 2.6,
+          "dew_point_c_metar": 0.3,
+          "wind_speed_ms_reanalysis": 4.2,
           "wet_days_1mm": 14.1,
           "precipitation_observed_days": 21.9,
-          "low_ceiling_share": 0.626
+          "low_ceiling_share": 0.626,
+          "star_nights": 4.4,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 2,
           "temperature_c_metar": 3.3,
           "temperature_c_reanalysis": 3.1,
+          "dew_point_c_metar": -0.2,
+          "wind_speed_ms_reanalysis": 4.0,
           "wet_days_1mm": 11.9,
           "precipitation_observed_days": 17.5,
-          "low_ceiling_share": 0.459
+          "low_ceiling_share": 0.459,
+          "star_nights": 6.0,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 3,
           "temperature_c_metar": 5.6,
           "temperature_c_reanalysis": 5.4,
+          "dew_point_c_metar": 0.3,
+          "wind_speed_ms_reanalysis": 3.6,
           "wet_days_1mm": 10.4,
           "precipitation_observed_days": 15.0,
-          "low_ceiling_share": 0.318
+          "low_ceiling_share": 0.318,
+          "star_nights": 11.2,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 4,
           "temperature_c_metar": 10.3,
           "temperature_c_reanalysis": 10.0,
+          "dew_point_c_metar": 3.1,
+          "wind_speed_ms_reanalysis": 3.5,
           "wet_days_1mm": 8.1,
           "precipitation_observed_days": 11.8,
-          "low_ceiling_share": 0.188
+          "low_ceiling_share": 0.188,
+          "star_nights": 10.5,
+          "ice_days": 0.9,
+          "beer_days": 0.0
         },
         {
           "month": 5,
           "temperature_c_metar": 14.6,
           "temperature_c_reanalysis": 14.4,
+          "dew_point_c_metar": 6.6,
+          "wind_speed_ms_reanalysis": 3.4,
           "wet_days_1mm": 9.0,
           "precipitation_observed_days": 12.6,
-          "low_ceiling_share": 0.136
+          "low_ceiling_share": 0.136,
+          "star_nights": 7.1,
+          "ice_days": 3.9,
+          "beer_days": 0.5
         },
         {
           "month": 6,
           "temperature_c_metar": 20.0,
           "temperature_c_reanalysis": 19.9,
+          "dew_point_c_metar": 11.2,
+          "wind_speed_ms_reanalysis": 3.1,
           "wet_days_1mm": 8.6,
           "precipitation_observed_days": 12.2,
-          "low_ceiling_share": 0.111
+          "low_ceiling_share": 0.111,
+          "star_nights": 0.0,
+          "ice_days": 11.6,
+          "beer_days": 4.6
         },
         {
           "month": 7,
           "temperature_c_metar": 20.2,
           "temperature_c_reanalysis": 20.1,
+          "dew_point_c_metar": 12.2,
+          "wind_speed_ms_reanalysis": 3.1,
           "wet_days_1mm": 10.2,
           "precipitation_observed_days": 13.8,
-          "low_ceiling_share": 0.131
+          "low_ceiling_share": 0.131,
+          "star_nights": 3.4,
+          "ice_days": 10.6,
+          "beer_days": 5.0
         },
         {
           "month": 8,
           "temperature_c_metar": 20.5,
           "temperature_c_reanalysis": 20.6,
+          "dew_point_c_metar": 12.8,
+          "wind_speed_ms_reanalysis": 2.9,
           "wet_days_1mm": 8.8,
           "precipitation_observed_days": 11.8,
-          "low_ceiling_share": 0.106
+          "low_ceiling_share": 0.106,
+          "star_nights": 11.9,
+          "ice_days": 13.1,
+          "beer_days": 7.1
         },
         {
           "month": 9,
           "temperature_c_metar": 16.2,
           "temperature_c_reanalysis": 16.3,
+          "dew_point_c_metar": 10.4,
+          "wind_speed_ms_reanalysis": 3.1,
           "wet_days_1mm": 6.8,
           "precipitation_observed_days": 10.8,
-          "low_ceiling_share": 0.143
+          "low_ceiling_share": 0.143,
+          "star_nights": 12.1,
+          "ice_days": 6.9,
+          "beer_days": 1.9
         },
         {
           "month": 10,
           "temperature_c_metar": 11.3,
           "temperature_c_reanalysis": 11.6,
+          "dew_point_c_metar": 8.0,
+          "wind_speed_ms_reanalysis": 3.6,
           "wet_days_1mm": 11.8,
           "precipitation_observed_days": 15.8,
-          "low_ceiling_share": 0.3
+          "low_ceiling_share": 0.3,
+          "star_nights": 8.5,
+          "ice_days": 0.2,
+          "beer_days": 0.0
         },
         {
           "month": 11,
           "temperature_c_metar": 5.8,
           "temperature_c_reanalysis": 6.0,
+          "dew_point_c_metar": 3.7,
+          "wind_speed_ms_reanalysis": 3.4,
           "wet_days_1mm": 9.1,
           "precipitation_observed_days": 16.8,
-          "low_ceiling_share": 0.502
+          "low_ceiling_share": 0.502,
+          "star_nights": 3.5,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         },
         {
           "month": 12,
           "temperature_c_metar": 3.2,
           "temperature_c_reanalysis": 3.3,
+          "dew_point_c_metar": 1.4,
+          "wind_speed_ms_reanalysis": 3.8,
           "wet_days_1mm": 11.4,
           "precipitation_observed_days": 20.0,
-          "low_ceiling_share": 0.616
+          "low_ceiling_share": 0.616,
+          "star_nights": 3.4,
+          "ice_days": 0.0,
+          "beer_days": 0.0
         }
       ],
       "yearly": [
@@ -317,6 +449,18 @@
         "25-50": 0.1,
         "50-75": 0.088,
         "75-100": 0.56
+      },
+      "wet_days_1mm_per_year": 120.1,
+      "wind_direction_share": {
+        "N": 0.06,
+        "NE": 0.079,
+        "E": 0.141,
+        "SE": 0.084,
+        "S": 0.12,
+        "SW": 0.165,
+        "W": 0.227,
+        "NW": 0.076,
+        "calm_variable": 0.048
       }
     }
   }

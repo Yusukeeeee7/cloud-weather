@@ -87,6 +87,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
       "temperature_c": 21.8,
       "precipitation_probability": 20,
       "precipitation_mm": 0.0,
+      "wind_speed_ms": 2.8,
       "cloud_cover": {"total": 70, "low": 50, "mid": 20, "high": 0}
     }
   ],
@@ -117,6 +118,7 @@ FastAPI が自動で生成する `/docs`（Swagger UI）、`/redoc`、`/openapi.
 - `city` を省略した場合は `tokyo` として扱う（2026-10-12 決定。使い始めやすくするため）。空文字（`city=`）は省略とは扱わず 422 `invalid_city`。
 - `current` の項目が Open-Meteo の応答に欠けている・null の場合は 502 `upstream_error`（一部だけ null で返さない。2026-10-12 決定）。
 - 機能ごとに段階的に追加する：#3 で `city`・`timezone`・`current`・`source`・`fetched_at`、#4 で `hourly`・`daily`、#5 で `cached`、#6 で `stale`（2026-10-12 決定）。未実装のキーは返さない。
+- `hourly` の `wind_speed_ms` は #25 の追加で足した（2026-10-19。Open-Meteo の `hourly=wind_speed_10m`、`wind_speed_unit=ms`。#12 から取得はしていた）。ほかの項目と同じく、返す範囲で欠けている・null なら 502。
 - `cached` は、キャッシュの値を返したとき `true`、外部APIから取得した値を返したとき `false`（#6 で「外部APIを呼ばずに」から書き直した。stale のときは外部APIを呼んだうえでキャッシュの値を返すため）。
   - キャッシュから返すときも、`fetched_at` は外部APIから取得した時刻のまま。`hourly` の 24 件は、返すたびにその時刻で選び直す（過ぎた時刻を先頭に残さない。2026-10-12 決定）。
 - `stale` は、外部APIが失敗し、TTL を過ぎた保存値を返したとき `true`。このとき `cached` も `true`。それ以外は常に `false`（2026-10-12 決定、#6）。
@@ -339,6 +341,9 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - 日差し：24 時間の予報の表に「日差し（前の 1 時間）」の列（「45 分」と、その下に「直達 214 / 散乱 167 W/m²」）、「現在」の欄に「日差し」のタイル（`/sunshine` の先頭の行。「〜14:00 の 1 時間」）。表の下に、前の 1 時間の値であることと、雲量が多くても薄い高層の雲なら日差しが通ることがあると書く。夜も「0 分」のまま出す。`/sunshine` が失敗したら、その列とタイルだけ空にし、「日差し：取得できませんでした」と書く（2026-10-14 決定）。
 - 雲底は `predicted_m` と `baseline_m` を並べる。`predicted_m` が 1524 のときは「1,524 m より下にシーリングなし」。`/cloud-base` が 503 のときは「モデルを読み込めていません」と出し、ほかの欄は表示を続ける。
 - どれかの API が失敗したら、その欄だけ「取得できませんでした」と出す。`/weather` が `stale: true` なら「古いデータです（取得：<時刻>）」と出す。
+- 読み込み中（#25 の追加、2026-10-19）：都市を切り替えたら、すぐに前の都市の値を消し、各欄を「読み込み中…」（くるくる。動きを減らす設定では回さない）にして、欄の `section` に `aria-busy="true"` を付ける。`/weather`・`/daylight` のあとに呼ぶ 5 つ（雲底・過去 24 時間・雲底の予報・雲底の過去・日差し）は、届いた欄から表示する（日照の欄は時刻の表示に `/weather` の `timezone` が要るので、`/weather` と一緒）。読み込み中の都市をもう一度押しても、取得を重ねない。
+- 取得できなかった欄には「もう一度読み込む」ボタンを置く（いまの都市を読み込み直す。読み込み中は押せない）（#25 の追加、2026-10-19）。
+- 24 時間の予報の表に「風速」の列（`/weather` の `hourly` の `wind_speed_ms`。「3.4 m/s」）（#25 の追加、2026-10-19）。風向は #58 で扱う。
 - 過去 24 時間：スライダー（0〜23、最初は最新）で 1 時間ずつ選ぶ。選んだ時刻と 4 つの雲量を数字で出し、空を高・中・低層の 3 段に分けた図の雲の量・濃さを雲量に合わせて変える。下に全体の雲量の折れ線と、選んだ時刻の印を出す。再生ボタンは付けない。
 - 出典「Weather data by Open-Meteo.com」と Open-Meteo へのリンクを表示する（CC BY 4.0。7 の表）。
 - CDN・Web フォント・地図のタイルなど、外部のホストから読み込まない。
@@ -350,7 +355,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 - `app/static/` の `compare.html`・`compare.js`（`style.css` は `GET /` と共通）。`include_in_schema=False` で、`/openapi.json` に載せない（DAST が取り込む道の数を変えない）。`GET /` の見出しの横に、この画面へのリンクを置く。
 - 表示は、ブラウザが同じオリジンの `/static/climate.json` だけを読んで行う（ほかの API・外部のホストは呼ばない）。値は `textContent` と SVG の属性で入れる。グラフは SVG を自分で描く（依存のパッケージを足さない）。
-- `climate.json` は、`notebooks/09_climate.ipynb` が `ml/climate.py` の `climate_summary` で `data/processed/observations.parquet` から作り、コミットする（イメージに入る）。キー：`mode`（`full`／`sample`。コミットするのは `full`）、`source`、`period`（`start`・`end`・`dates: "local"`）、`cities.<city>.monthly`（12 行：`month`・`temperature_c_metar`・`temperature_c_reanalysis`・`wet_days_1mm`・`precipitation_observed_days`・`low_ceiling_share`）、`cities.<city>.yearly`（8 行：`year`・`precipitation_mm`・`complete_days`・`metar_auto_share`）、`cities.<city>.cloud_cover_share`（`0-25`・`25-50`・`50-75`・`75-100`）。割合は 0〜1 で小数 3 桁、ほかは小数 1 桁。値のない所は `null`（NaN・無限大は書かない）。
+- `climate.json` は、`notebooks/09_climate.ipynb` が `ml/climate.py` の `climate_summary` で `data/processed/observations.parquet` から作り、コミットする（イメージに入る）。キー：`mode`（`full`／`sample`。コミットするのは `full`）、`source`、`period`（`start`・`end`・`dates: "local"`）、`cities.<city>.monthly`（12 行：`month`・`temperature_c_metar`・`temperature_c_reanalysis`・`dew_point_c_metar`（METAR の露点の平均。2026-10-19 に追加）・`wind_speed_ms_reanalysis`（再解析の `wind_speed_10m` の平均。2026-10-19 に追加）・`wet_days_1mm`・`precipitation_observed_days`・`low_ceiling_share`・`star_nights`（星空日和の夜の、年あたりの数。このサイト独自の目安：太陽が −18° より下の正時のうち、再解析の雲量が 25 % 未満の時間が半分以上ある夜。夜は夕方の現地の日付の月に入れ、暗くならない夜は数えない。2026-10-19 に追加）・`ice_days`・`beer_days`（アイス日和・ビール日和の、年あたりの日数。このサイト独自の目安：日最高気温（METAR の正時の値の最大。行のそろった日で、気温の欠けがない日だけ）が 25 ℃以上で降水を観測しなかった日、30 ℃以上の日。25・30 は気象庁「予報用語」の夏日・真夏日（日最高気温が 25 度・30 度以上の日。2026-10-19 に原文で確認）。2026-10-19 に追加））、`cities.<city>.yearly`（8 行：`year`・`precipitation_mm`・`complete_days`・`metar_auto_share`）、`cities.<city>.cloud_cover_share`（`0-25`・`25-50`・`50-75`・`75-100`）。`cities.<city>.wet_days_1mm_per_year`（1 mm 以上の日の、1 年あたりの数。月ごとの年あたりの日数を丸める前に 12 か月ぶん足したもの。2026-10-19 に追加）、`cities.<city>.wind_direction_share`（`N`・`NE`・`E`・`SE`・`S`・`SW`・`W`・`NW`・`calm_variable`。METAR の正時の電文の最初の風の群から読んだ、吹いてくる方向の 8 方位（北は 337.5° 以上・22.5° 未満）と、静穏・`VRB` の割合。風の値が欠けた行は除く。2026-10-19 に追加）。割合は 0〜1 で小数 3 桁、ほかは小数 1 桁。値のない所は `null`（NaN・無限大は書かない）。
 - 値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の過去データ（再解析）を使う。グラフの見出しに「実測」「再解析」の札を付け、再解析の意味（観測を入れて数値モデルで計算し直した値。マス目の平均）を画面に書く。
 - 日ごとの集計は現地の日付で区切り、1 時間ごとの行がそろった日だけを使う（夏時間の切り替え日は 23・25 行）。日が欠けた年（2018 年は 1 月 1 日が欠ける）は、注に「○年は ○日分」と出す。
 - グラフ（どれも東京とベルリンを並べる）：
@@ -360,6 +365,13 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
   - 月ごとの降水を観測した日数（棒、実測。年あたりの平均）。その日の正時の METAR（前後 30 分以内の 1 つ）のどれかで降水があった日。正時のあいだだけ降った日は数えないので、実際より少なめになることを画面に書く。降水は、`weather_codes` の群のうち、降水の記号（`DZ`・`RA`・`SN`・`SG`・`PL`・`GR`・`GS`・`UP`）を含み、`VC`（飛行場から約 8〜16 km）で始まらず、`DR`・`BL`（吹き上げられた雪など）を含まないもの（7 の表「METAR の天気の記号」）。規格にない `VCRA` のような群も数えない。
   - 雲量の分布（円、再解析。都市ごとに 1 つ）。区分は 0〜25 未満・25〜50 未満・50〜75 未満・75〜100 %。0〜100 の外や欠けがあれば集計を止める（`ValueError`）。
   - 月ごとの低い雲底の時間の割合（折れ線、実測）。目的変数（9 の `target_m`）が 1,524 m より下の時間の割合。目的変数が欠ける時間は分母に入れない。注に、ベルリンの年ごとの自動観測（電文に `AUTO`）の割合を出す（2022 年に切り替わった）。
+  - 以下は #25 の追加（2026-10-19）。
+  - 月ごとの 1 mm 以上の日数の下に、1 年あたりの合計（`wet_days_1mm_per_year`。「1 年あたりの合計：東京 136.0 日、ベルリン 120.1 日」）。
+  - 月ごとの平均の露点（折れ線、実測。METAR の露点の平均）。
+  - 月ごとの平均風速（折れ線、再解析。`wind_speed_10m` の平均。目盛りは 0 から）。
+  - 風配図（都市ごとに 1 つ、実測。METAR の正時の電文の最初の風の群から、吹いてくる方向の 8 方位の割合をくさびの長さで描く。2 都市で同じ目盛り。静穏・`VRB` は図に入れず、割合を下に書く）。
+  - 月ごとの星空日和の夜の数（棒、再解析の雲量と太陽の計算。このサイト独自の目安と書く。決まりは `climate.json` の `star_nights`）。
+  - 月ごとのアイス日和・ビール日和の日数（棒 2 つ、実測。このサイト独自の目安と書き、基準が気象庁の夏日・真夏日であることと、正時の値の最大なので気象庁の日最高気温より低めになりうることを書く）。
 - 色：都市は青・橙、雲量の区分は青の濃淡（暗い画面では明暗を逆にする）。dataviz の検証スクリプトで、白（`#ffffff`）と暗い面（`#1b212a`）の両方で、色覚の違いを含めて基準を満たすことを確かめた。
 - 出典（Open-Meteo の CC BY 4.0 とリンク、Iowa Environmental Mesonet）を表示する。グラフの見た目は自動テストせず、手元のブラウザで確かめる（`GET /` と同じ）。
 
@@ -417,6 +429,9 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 過去の気象 | Open-Meteo Historical | `archive-api.open-meteo.com/v1/archive`、`start_date`・`end_date`（必須、`yyyy-mm-dd`）。`hourly=` に temperature_2m, dew_point_2m, relative_humidity_2m, pressure_msl, precipitation, weather_code, cloud_cover, cloud_cover_low/mid/high, wind_speed_10m（precipitation だけ「前の 1 時間の合計」、ほかは「その時刻の値」）。`wind_speed_unit=ms`、`timeformat=unixtime`、`timezone` の既定は GMT。`daily=` に sunrise, sunset（#7 のテストの期待値として取得）。データは再解析（ERA5 など。1940 年〜、5 日遅れ） | 非商用は API キー不要。上限は予報と同じ（600 回/分・5,000 回/時・10,000 回/日・300,000 回/月）。10 項目を超える・2 週間を超える要求は、複数回ぶんとして数えられる（式は公式に書かれていない） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
 | METAR過去データ | Iowa Environmental Mesonet（IEM） | `mesonet.agron.iastate.edu/cgi-bin/request/asos.py`。`station`（ICAO）、`data`（列。複数可）、`sts`・`ets`（開始を含み、終了を含まない）、`tz=UTC`、`format=onlycomma`、`missing=empty`、`trace=empty`、`report_type`（3＝定時、4＝臨時）。列：valid（観測の時刻）、tmpf・dwpf（華氏）、vsby（マイル）、skyc1〜4（雲の層の量）、skyl1〜4（雲の層の高さ、フィート）、wxcodes、metar（もとの電文）。mslp は対象の 2 空港では空 | パブリックドメイン（IEM の名前を書くことが望ましい）。同じ IP からは 1 秒に 1 回まで（超えると 429）、混雑時は 503、1 回の要求は 1,000 観測所・年まで（超えると 422） | 確認済み（2026-10-12、#8。人間の指示で AI が公式ドキュメントと実レスポンスを照合） |
 | METAR の天気の記号 | WMO | `weather_codes`（IEM の `wxcodes`）の記号（#25 の「降水を観測した日数」に使う）。WMO-No. 782（2025 年版）5 節「PRESENT WEATHER」の Code table 4678（出典は WMO-No. 306）：強さ `-`（弱）・なし（並）・`+`（強）、`VC`（飛行場の基準点から約 8〜16 km。飛行場の上ではない）。記述 `MI`・`BC`・`PR`・`DR`（地上 2 m 未満に吹き上げられた）・`BL`（2 m より上に吹き上げられた）・`SH`・`TS`・`FZ`。降水 `DZ`・`RA`・`SN`・`SG`・`PL`・`GR`・`GS`・`UP`（自動観測で種類が分からない降水）。`DR`・`BL` は雪・砂・塵が風で吹き上げられたもので、降水ではない（同書の天気の説明 23・24）。降水が 2 種類以上なら 1 つの群にまとめる（例 `-SHSNRAGS`）。直前の天気（`RE`。前の 1 時間か前の観測から、観測の時刻には起きていない）は別の節で、**このデータの `weather_codes` には入っていない**（電文に `RERA` などがある 1,167 行で確かめた） | 同上 | 確認済み（2026-10-19、#25。人間の指示で AI が照合。WMO の e-Library（`library.wmo.int`）に接続できなかったので、モンゴルの航空気象の機関（`amc2.namem.gov.mn`）が公開している 2025 年版の PDF（表紙で 2025 edition・ISBN 978-92-63-10782-4 を確かめた）を取得し、5 節と天気の説明の原文を `pdftotext` で読んだ。WMO の公式のサイトの写しではない。規定そのもの（WMO-No. 306）は読んでいない） |
+| METAR の風 | WMO | `metar`（電文）の風の群（#25 の追加の風配図に使う）。WMO-No. 782（2025 年版）2 節「SURFACE WIND」：`dddff(Gfmfm)KT` または `MPS`。前の 3 桁が風向（10° 刻み、真方位。TAF の節に「wind direction from true north」）、後ろが 10 分間の平均風速。`G` のあとは突風。`dndndnVdxdxdx`（例 `280V350`）は向きの幅。`VRB`（風速 3 kt 未満、または 3 kt 以上で 180° 以上変わり 1 つに決められない）。静穏（1 kt 未満）は `00000KT`。欠けたときは `///05KT`・`270//KT`・`/////KT`。100 kt 以上は `P99KT`。**風向が「吹いてくる方向」であることは WMO-No. 782 には書かれていない**。米国気象局（NWS）の用語集（`forecast.weather.gov/glossary.php?word=wind%20direction`）は「The true direction from which the wind is blowing」「North is 360 degrees. A wind direction of 0 degrees is only used when wind is calm」 | 同上 | 確認済み（2026-10-19、#25 の追加。人間の指示で AI が照合。#25 で取得した 2025 年版の PDF の 2 節の原文を `pdftotext` で読んだ。NWS の用語集は `curl` で取得し、原文を読んだ。WMO の規定（WMO-No. 306・No. 8）は読んでいない） |
+| METAR過去データの風の列 | Iowa Environmental Mesonet（IEM） | `drct`「Wind Direction in degrees from *true* north」、`sknt`「Wind Speed in knots」（`mesonet.agron.iastate.edu/request/download.phtml`）。`VRB`・静穏のときの値は書かれていない。**取得したデータ（`data/raw/iem/`）には、この 2 列はない**（`app/clients/iem.py` の `COLUMNS` にない）。テスト用のサンプル（`tests/fixtures/data_raw/iem/`）にはある | 同上 | 確認済み（2026-10-19、#25 の追加。同上。説明のページを `curl` で取得し、原文を読んだ） |
+| 予報の風向 | Open-Meteo Forecast | `wind_direction_10m`：Instant（その時刻の値）、単位 `°`、「Wind direction at 10, 80, 120 or 180 meters above ground」（`open-meteo.com/en/docs` の hourly の表）。**吹いてくる方向か吹いていく方向かは、公式に書かれていない**。実データ（2026-10-19T20:00Z ごろ、hourly と current）で IEM の METAR と比べると、ベルリンは Open-Meteo 53〜69°・METAR 050〜070° でそろった（吹いていく方向なら 180° ずれる）。東京は風の弱い時間（1〜4 kt）にずれが大きかった。応答の値は整数だった | 予報と同じ | 確認済み（2026-10-19、#25 の追加。同上。説明のページを `curl` で取得し、原文を読んだ。吹いてくる方向であることは、公式の記述ではなく、実データとの比べ合わせによる） |
 
 - 外部通信のタイムアウト：接続 3 秒、全体 10 秒。リトライは最大 2 回（指数バックオフ）。
   - 「全体 10 秒」は 1 回の試行ごと（2026-10-12 決定、#6）。
@@ -732,7 +747,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 22 | SBOM と来歴 | CD で push したイメージの SBOM を作り、ビルドの来歴をイメージに付ける。手元から来歴を検証する手順を docs に書き、人間が 1 回検証する。リポジトリやパッケージが private でも使えるかは計画で確かめる | 完了（2026-10-16。main へのマージ後の CD で来歴と SBOM が付き、手元からの検証が成功。記録は `docs/provenance.md`） |
 | 23 | DAST | CD で、スモークテストと同じく外部と通信できないコンテナに対して、OWASP ZAP の API スキャン（`/openapi.json` を使う）を実行する。High の警告があれば push しない。初回の結果と対応を docs に記録する | 完了（2026-10-17。main へのマージ後の CD（run 38974879281）で DAST の手順が成功し、push された。取り込んだ URL 11、High 0 件。記録は `docs/dast.md`） |
 | 24 | OpenSSF Scorecard | Scorecard が定期（週 1 回）と main への push で実行され、結果が Security タブに出る。初回の点数と、点の低い項目への対応（直す／直さない理由）を docs に記録する | 実装済み（2026-10-19。main への push の実行（run 39252804563）が成功し、Security タブに結果が出た。初回 5.3。記録は `docs/scorecard.md`。週 1 回の実行は 2026-10-24 以降に確認） |
-| 25 | 気候の比較ページ | `data/processed/observations.parquet`（2018〜2025 年）から、東京とベルリンの気候の指標を集計して JSON に保存し、新しいページ `GET /compare` がそれを読んで棒・円・折れ線のグラフで比べる。値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の過去データ（再解析）を使い、グラフごとにどちらかを書く。集計は `ml/climate.py` の関数で行い、テストを付ける。日ごとの集計は現地の日付で区切る。ページは外部と通信せず、依存のパッケージを足さない（SVG を自分で描く） | 実装済み（2026-10-19。画面の見た目は人間がブラウザで確認する） |
+| 25 | 気候の比較ページ | `data/processed/observations.parquet`（2018〜2025 年）から、東京とベルリンの気候の指標を集計して JSON に保存し、新しいページ `GET /compare` がそれを読んで棒・円・折れ線のグラフで比べる。値は METAR（実測）を優先し、METAR にないもの（降水量・空全体の雲量）だけ Open-Meteo の過去データ（再解析）を使い、グラフごとにどちらかを書く。集計は `ml/climate.py` の関数で行い、テストを付ける。日ごとの集計は現地の日付で区切る。ページは外部と通信せず、依存のパッケージを足さない（SVG を自分で描く） | 実装済み（2026-10-19。画面の見た目は人間がブラウザで確認する）。追加（2026-10-19、#52 の 2 つ目の PR）：画面の読み込み中の表示と「もう一度読み込む」、比較ページの露点・風速・風配図・星空日和・アイス日和・ビール日和・雨の日数の 1 年あたりの合計、`/weather` の 1 時間ごとの風速。今日の天気の風向きは #58 |
 
 #16・#17 は、#13・#14 より先に進める（2026-10-13 に変更。それまでは「#13・#14 の後」としていた）。決まりは「9. モデルの改善」。
 

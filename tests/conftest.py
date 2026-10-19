@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 from collections.abc import Callable, Iterator
@@ -10,12 +11,19 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from app.cities import City
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-# fixture を取得した時刻（2026-10-12T15:02:12Z）の直後にする。
+# `/weather` の fixture（いまの取得と同じ URL。#25 の追加で取り直した）を取得した時刻
+# （2 都市とも 2026-10-19T18:25:57Z〜18:25:58Z）の直後にする。
 # hourly の 24 件は時計に依存するため、fixture を取り直したらここも変える。
 # 秒未満を含む時刻にして、レスポンスで切り捨てられることも確かめられるようにする。
-FIXED_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
+FIXED_NOW = datetime(2026, 10, 19, 18, 26, 0, 123456, tzinfo=UTC)
+
+# #12 より前の形の fixture（hourly に 4 項目がない）を取得した時刻（2026-10-12T15:02:12Z）の直後。
+# 「4 項目のない保存値」のテストに使う。
+LEGACY_NOW = datetime(2026, 10, 12, 15, 2, 30, 123456, tzinfo=UTC)
 
 # /cloud-base 用の fixture（hourly に 4 項目を足した応答）を取得した時刻の直後。
 # 東京 2026-10-13T14:16:25Z、ベルリン 14:16:29Z。
@@ -47,11 +55,16 @@ def _load(name: str) -> RawForecast:
 
 
 def load_forecast(city: str) -> RawForecast:
-    return _load(f"forecast_{city}.json")
+    return _load(f"forecast_{city}_wind.json")
 
 
 def load_forecast_iso8601(city: str) -> RawForecast:
-    return _load(f"forecast_{city}_iso8601.json")
+    return _load(f"forecast_{city}_wind_iso8601.json")
+
+
+def load_legacy_forecast(city: str) -> RawForecast:
+    """#12 より前の形（hourly に 4 項目・日差しの 3 項目・過去の時間がない）。"""
+    return _load(f"forecast_{city}.json")
 
 
 def load_cloud_base_forecast(city: str) -> RawForecast:
@@ -113,6 +126,24 @@ def client(open_meteo: respx.MockRouter) -> Iterator[TestClient]:
 def iso(at: datetime) -> str:
     """応答の時刻の書き方（UTC、末尾 Z、秒まで）。"""
     return at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def seed_weather_cache(
+    client: TestClient, city: str, raw: RawForecast, fetched_at: datetime
+) -> None:
+    """`/weather` と同じ保存先（weather:{city}）に、外部APIの応答を直接入れる。
+
+    いまの `/weather` では受け付けない古い形の応答を、保存値として用意するため
+    （#25 の追加で、hourly に風速が要るようになった）。
+    """
+    from app.services.weather import cache_key
+
+    entry = json.dumps({"fetched_at": fetched_at.isoformat(), "raw": raw})
+    # 6 時間（stale の上限の既定）。期限そのものは、ここでは確かめない。
+    cache = client.app.state.weather_cache
+    asyncio.run(cache.set(cache_key(City(city)), entry, 6 * 3600))
+    # 入ったことを確かめる（入っていないと、「保存値がない」場合のテストになってしまう）。
+    assert asyncio.run(cache.get(cache_key(City(city)))) == entry
 
 
 def mock_ok(open_meteo: respx.MockRouter, raw: RawForecast) -> respx.Route:

@@ -24,12 +24,13 @@ from tests.app.cloud_base_fakes import (
 )
 from tests.conftest import (
     CLOUD_BASE_NOW,
-    FIXED_NOW,
     FORECAST_URL,
+    LEGACY_NOW,
     FakeClock,
     RawForecast,
     load_cloud_base_forecast,
-    load_forecast,
+    load_legacy_forecast,
+    seed_weather_cache,
 )
 
 VALID_AT = datetime(2026, 10, 13, 14, 0, tzinfo=UTC)
@@ -415,19 +416,17 @@ def test_cloud_base_selects_row_again_when_served_from_cache(
 def test_cloud_base_refetches_when_cached_entry_lacks_new_items(
     client: TestClient, open_meteo: respx.MockRouter
 ) -> None:
-    # 4 項目を足す前の応答（既存の fixture の形）が保存されている場合。
-    # 既存の fixture の取得時刻（FIXED_NOW）の正時 15:00Z は、新しい東京の fixture の先頭の行。
-    clock = FakeClock(FIXED_NOW)
+    # 4 項目を足す前の応答（古い fixture の形）が保存されている場合。
+    # 古い fixture の取得時刻（LEGACY_NOW）の正時 15:00Z は、#12 の東京の fixture の先頭の行。
+    # いまの /weather は古い形を受け付けない（hourly に風速が要る）ので、保存先に直接入れる。
+    clock = FakeClock(LEGACY_NOW)
     _use_clock(clock)
-    route = _mock_ok(open_meteo, load_forecast("tokyo"))
+    seed_weather_cache(client, "tokyo", load_legacy_forecast("tokyo"), LEGACY_NOW)
+    new = load_cloud_base_forecast("tokyo")
+    route = _mock_ok(open_meteo, new)
     fake, _ = fake_model(850.0)
     _use_model(fake)
-    weather = client.get("/weather", params={"city": "tokyo"})
-    assert (weather.status_code, route.call_count) == (200, 1)
-
-    new = load_cloud_base_forecast("tokyo")
-    route.mock(return_value=httpx.Response(200, json=new))
-    clock.now = FIXED_NOW + timedelta(minutes=5)
+    clock.now = LEGACY_NOW + timedelta(minutes=5)
     cloud_base = client.get("/cloud-base", params={"city": "tokyo"})
     again = client.get("/cloud-base", params={"city": "tokyo"})
 
@@ -438,25 +437,25 @@ def test_cloud_base_refetches_when_cached_entry_lacks_new_items(
     )
     # 呼び直した応答は保存され、次は外部APIを呼ばない。
     assert again.json() == cloud_base.json()
-    assert route.call_count == 2
+    assert route.call_count == 1
 
 
 def test_cloud_base_old_entry_and_upstream_failure_is_502(
     client: TestClient, open_meteo: respx.MockRouter
 ) -> None:
     # 4 項目のない保存値は、stale としても使えない。
-    clock = FakeClock(FIXED_NOW)
+    clock = FakeClock(LEGACY_NOW)
     _use_clock(clock)
-    route = _mock_ok(open_meteo, load_forecast("tokyo"))
+    seed_weather_cache(client, "tokyo", load_legacy_forecast("tokyo"), LEGACY_NOW)
+    route = open_meteo.get(FORECAST_URL).mock(return_value=httpx.Response(500))
     fake, _ = fake_model(850.0)
     _use_model(fake)
-    client.get("/weather", params={"city": "tokyo"})
-
-    route.mock(return_value=httpx.Response(500))
-    clock.now = FIXED_NOW + timedelta(minutes=5)
+    clock.now = LEGACY_NOW + timedelta(minutes=5)
     response = client.get("/cloud-base", params={"city": "tokyo"})
 
     _assert_error(response, 502, "upstream_error")
+    # 保存値を見たうえで、外部APIを呼んで失敗している。
+    assert route.call_count > 0
 
 
 def test_cloud_base_uses_stale_cache_when_upstream_fails(

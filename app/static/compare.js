@@ -17,6 +17,17 @@ const CLOUD_BANDS = [
   { key: "50-75", label: "50〜75 %" },
   { key: "75-100", label: "75〜100 %" },
 ];
+// ml/climate.py の WIND_SECTORS の 8 方位（「静穏・不定」は図には描かず、下に書く）。
+const WIND_SECTORS = [
+  { key: "N", label: "北" },
+  { key: "NE", label: "北東" },
+  { key: "E", label: "東" },
+  { key: "SE", label: "南東" },
+  { key: "S", label: "南" },
+  { key: "SW", label: "南西" },
+  { key: "W", label: "西" },
+  { key: "NW", label: "北西" },
+];
 // グラフの枠（viewBox 640 × 260 の中の、軸の内側）。
 const BOX = { left: 48, right: 628, top: 16, bottom: 228 };
 
@@ -209,6 +220,54 @@ function pieChart(city, shares) {
   return figure;
 }
 
+// 風配図。shares は WIND_SECTORS の割合（0〜1）。くさびの長さは max（2 都市で共通）に対する割合。
+function roseChart(city, shares, max) {
+  const figure = el("figure", undefined, "pie");
+  const chart = svg("svg", { viewBox: "0 0 220 220", role: "img", class: "pie-chart" });
+  chart.setAttribute("aria-label", `${city.label}の風向の分布`);
+  const center = 110;
+  const radius = 80;
+  for (const ring of [0.5, 1]) {
+    chart.append(svg("circle", { cx: center, cy: center, r: radius * ring, class: "rose-ring" }));
+  }
+  WIND_SECTORS.forEach((sector, index) => {
+    const share = shares[sector.key];
+    if (!isNumber(share) || share <= 0 || max <= 0) {
+      return;
+    }
+    // 北を上にして時計回り。くさびは方位の中心から ±22.5°（隣と 2° あける）。
+    const length = (radius * share) / max;
+    const point = (degrees) => {
+      const value = ((degrees - 90) * Math.PI) / 180;
+      return `${(center + length * Math.cos(value)).toFixed(2)},${(center + length * Math.sin(value)).toFixed(2)}`;
+    };
+    const wedge = svg("path", {
+      d: `M${center},${center} L${point(index * 45 - 21.5)} A${length},${length} 0 0 1 ${point(index * 45 + 21.5)} Z`,
+      class: `rose ${city.key}`,
+    });
+    const title = svg("title", {});
+    title.textContent = `${sector.label}：${formatNumber(share * 100, 1)}%`;
+    wedge.append(title);
+    chart.append(wedge);
+  });
+  for (const [label, x, y] of [["北", center, 22], ["東", 204, center + 4], ["南", center, 212], ["西", 16, center + 4]]) {
+    chart.append(text(x, y, label, "grid-label"));
+  }
+  figure.append(chart);
+
+  const caption = el("figcaption");
+  caption.append(el("strong", city.label));
+  const known = WIND_SECTORS.filter((sector) => isNumber(shares[sector.key]));
+  const top = known.reduce((best, sector) => (best && shares[best.key] >= shares[sector.key] ? best : sector), null);
+  const calm = shares.calm_variable;
+  const list = el("ul", undefined, "pie-legend");
+  list.append(el("li", top ? `いちばん多い：${top.label}の風（${formatNumber(shares[top.key] * 100, 1)}%）` : "—"));
+  list.append(el("li", `静穏・向きの定まらない風：${isNumber(calm) ? formatNumber(calm * 100, 1) : "—"}%`));
+  caption.append(list);
+  figure.append(caption);
+  return figure;
+}
+
 function monthly(data, city, name) {
   return data.cities[city.key].monthly.map((row) => row[name]);
 }
@@ -224,6 +283,22 @@ function render(data) {
     ]),
     "℃",
     false,
+  );
+
+  lineChart(
+    document.getElementById("dew-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "dew_point_c_metar"), className: city.key })),
+    "℃",
+    false,
+  );
+
+  lineChart(
+    document.getElementById("wind-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "wind_speed_ms_reanalysis"), className: city.key })),
+    "m/s",
+    true,
   );
 
   barChart(
@@ -264,6 +339,37 @@ function render(data) {
     pies.append(pieChart(city, data.cities[city.key].cloud_cover_share));
   }
 
+  // 2 都市で同じ長さの目盛りにする（比べられるように）。
+  const roses = document.getElementById("wind-roses");
+  clear(roses);
+  const roseMax = Math.max(
+    ...CITIES.flatMap((city) =>
+      WIND_SECTORS.map((sector) => data.cities[city.key].wind_direction_share[sector.key]).filter(isNumber),
+    ),
+    0,
+  );
+  for (const city of CITIES) {
+    roses.append(roseChart(city, data.cities[city.key].wind_direction_share, roseMax));
+  }
+
+  barChart(
+    document.getElementById("star-chart"),
+    MONTH_LABELS,
+    CITIES.map((city) => ({ label: city.label, values: monthly(data, city, "star_nights"), className: city.key })),
+    "",
+    1,
+  );
+
+  for (const [id, key] of [["ice-chart", "ice_days"], ["beer-chart", "beer_days"]]) {
+    barChart(
+      document.getElementById(id),
+      MONTH_LABELS,
+      CITIES.map((city) => ({ label: city.label, values: monthly(data, city, key), className: city.key })),
+      "",
+      1,
+    );
+  }
+
   lineChart(
     document.getElementById("ceiling-chart"),
     MONTH_LABELS,
@@ -275,6 +381,13 @@ function render(data) {
     "%",
     true,
   );
+
+  // 雨の日数の、1 年あたりの合計（月ごとの棒を 12 か月ぶん足したもの）。
+  const totals = CITIES.map((city) => {
+    const total = data.cities[city.key].wet_days_1mm_per_year;
+    return `${city.label} ${isNumber(total) ? `${formatNumber(total, 1)} 日` : "—"}`;
+  });
+  document.getElementById("wet-total").textContent = `1 年あたりの合計：${totals.join("、")}`;
 
   // 年の数え方（現地の日付）で欠けた日がある年を書く。
   const short = CITIES.flatMap((city) =>

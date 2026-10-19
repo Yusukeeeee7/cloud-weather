@@ -8,6 +8,7 @@
 
 import math
 import numbers
+import re
 from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -15,6 +16,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from app.cities import CITIES, City
+from ml.features import solar_elevation_series
 from ml.target import CEILING_CAP_M, target_m
 
 SOURCE = "data/processed/observations.parquet"
@@ -29,8 +31,22 @@ PRECIPITATION_CODES = frozenset({"DZ", "RA", "SN", "SG", "PL", "GR", "GS", "UP"}
 _RAISED = frozenset({"DR", "BL"})
 _VICINITY = "VC"
 _AUTO = r"\bAUTO\b"
+# METAR の風の群（WMO-No. 782 の 2 節。spec 7「METAR の風」）：風向 3 桁（または VRB・///）、
+# 風速 2〜3 桁（または //）、突風、単位。
+_WIND_GROUP = re.compile(r"^(?P<direction>VRB|\d{3}|///)(?:\d{2,3}|//)(?:G\d{2,3})?(?:KT|MPS)$")
+_CALM = re.compile(r"^00000(?:KT|MPS)$")
+# 風配図の 8 方位（北から時計回りに 45° ずつ）と、静穏・向きの定まらない風。
+WIND_SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW", "calm_variable")
+WindKind = Literal["direction", "calm", "variable", "missing"]
 _TEMPERATURE_COLUMNS = {"metar": "metar_temperature_c", "reanalysis": "temperature_c"}
 _MONTHS = range(1, 13)
+# 星空日和の夜：天文薄明（spec 5 の `/daylight`）の高度より下を暗い時間とし、
+# 雲量 25 % 未満を晴れとする。
+# アイス日和・ビール日和：気象庁の夏日・真夏日（日最高気温が 25 度・30 度以上の日）。
+SUMMER_DAY_C = 25.0
+MIDSUMMER_DAY_C = 30.0
+ASTRONOMICAL_DARK_DEG = -18.0
+STAR_CLEAR_COVER = 25.0
 
 TemperatureSource = Literal["metar", "reanalysis"]
 
@@ -112,6 +128,15 @@ def monthly_wet_days(observations: pd.DataFrame, threshold_mm: float = WET_DAY_M
     return _average_days_per_year(daily, daily["precipitation_mm"] >= threshold_mm)
 
 
+def yearly_wet_days(observations: pd.DataFrame, threshold_mm: float = WET_DAY_MM) -> pd.DataFrame:
+    """1 年あたりの「`threshold_mm` 以上の日」の数。
+
+    月ごとの年あたりの日数（丸める前）を 12 か月ぶん足したもの。
+    """
+    monthly = monthly_wet_days(observations, threshold_mm)
+    return monthly.groupby("city")["days"].sum().rename("days").reset_index()
+
+
 def yearly_precipitation_mm(observations: pd.DataFrame) -> pd.DataFrame:
     """年ごとの降水量の合計と、合計に使ったそろった日の数（再解析）。"""
     daily = daily_precipitation_mm(observations)
@@ -126,10 +151,24 @@ def monthly_temperature_c(observations: pd.DataFrame, source: TemperatureSource)
     """月ごとの平均気温。`source` は `metar`（実測）か `reanalysis`（再解析）。欠けた行は除く。"""
     if source not in _TEMPERATURE_COLUMNS:
         raise ValueError("source must be 'metar' or 'reanalysis'")
-    values = observations[_TEMPERATURE_COLUMNS[source]].astype("float64")
+    return _monthly_mean(observations, _TEMPERATURE_COLUMNS[source], "temperature_c")
+
+
+def monthly_dew_point_c(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの平均の露点（METAR、実測）。欠けた行は除く。"""
+    return _monthly_mean(observations, "metar_dew_point_c", "dew_point_c")
+
+
+def monthly_wind_speed_ms(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの平均風速（再解析、m/s）。欠けた行は除く。"""
+    return _monthly_mean(observations, "wind_speed_ms", "wind_speed_ms")
+
+
+def _monthly_mean(observations: pd.DataFrame, column: str, name: str) -> pd.DataFrame:
+    values = observations[column].astype("float64")
     months = _local_times(observations).dt.month
     means = values.groupby([observations["city"], months.rename("month")]).mean().dropna()
-    return means.rename("temperature_c").reset_index()
+    return means.rename(name).reset_index()
 
 
 def cloud_cover_share(observations: pd.DataFrame) -> pd.DataFrame:
@@ -193,12 +232,116 @@ def monthly_precipitation_observed_days(observations: pd.DataFrame) -> pd.DataFr
 
     正時の観測（前後 30 分以内の 1 つ）のどれかで降水があった日。
     """
+    daily = _daily_precipitation_observed(observations)
+    return _average_days_per_year(daily, daily["observed"])
+
+
+def _daily_precipitation_observed(observations: pd.DataFrame) -> pd.DataFrame:
+    """現地の日ごとの「METAR で降水を観測したか」（そろった日だけ）。"""
     days = complete_days(observations)
     observed = days["weather_codes"].map(is_precipitation).astype("bool")
-    daily = (
+    return (
         observed.groupby([days["city"], days["local_date"]]).any().rename("observed").reset_index()
     )
-    return _average_days_per_year(daily, daily["observed"])
+
+
+def daily_max_temperature_c(observations: pd.DataFrame) -> pd.DataFrame:
+    """現地の日ごとの最高気温（METAR の正時の値の最大）。そろった日で、気温の欠けがない日だけ。"""
+    days = complete_days(observations)
+    values = days["metar_temperature_c"].astype("float64")
+    grouped = values.groupby([days["city"], days["local_date"]])
+    result = pd.DataFrame({"max_temperature_c": grouped.max(), "known": grouped.count()})
+    result = result[result["known"] == grouped.size()]
+    return result[["max_temperature_c"]].reset_index()
+
+
+def _daily_highs_and_precipitation(observations: pd.DataFrame) -> pd.DataFrame:
+    highs = daily_max_temperature_c(observations)
+    observed = _daily_precipitation_observed(observations)
+    return highs.merge(observed, on=["city", "local_date"], how="left")
+
+
+def monthly_ice_days(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとのアイス日和（このサイト独自の目安）の数の、年あたりの平均。
+
+    日最高気温（METAR）が 25 ℃以上（気象庁の夏日）で、降水を観測しなかった日。
+    """
+    daily = _daily_highs_and_precipitation(observations)
+    hot = daily["max_temperature_c"] >= SUMMER_DAY_C
+    return _average_days_per_year(daily, hot & ~daily["observed"].astype("bool"))
+
+
+def monthly_beer_days(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとのビール日和（このサイト独自の目安）の数の、年あたりの平均。
+
+    日最高気温（METAR）が 30 ℃以上（気象庁の真夏日）の日。
+    """
+    daily = daily_max_temperature_c(observations)
+    return _average_days_per_year(daily, daily["max_temperature_c"] >= MIDSUMMER_DAY_C)
+
+
+def monthly_star_nights(observations: pd.DataFrame) -> pd.DataFrame:
+    """月ごとの星空日和の夜の数の、年あたりの平均（このサイト独自の目安）。
+
+    暗い正時（太陽が −18° より下）のうち、雲量（再解析）が 25 % 未満の時間が半分以上ある夜。
+    夜は夕方の現地の日付で数える（正午から次の日の正午まで）。暗くならない夜は数えない。
+    """
+    dark = solar_elevation_series(observations) < ASTRONOMICAL_DARK_DEG
+    clear = observations["cloud_cover"].astype("float64") < STAR_CLEAR_COVER
+    nights = (_local_times(observations) - pd.Timedelta(hours=12)).dt.date
+    table = pd.DataFrame(
+        {"city": observations["city"], "local_date": nights, "dark": dark, "clear": dark & clear}
+    )
+    counts = table.groupby(["city", "local_date"])[["dark", "clear"]].sum().reset_index()
+    star = (counts["dark"] > 0) & (counts["clear"] * 2 >= counts["dark"])
+    return _average_days_per_year(counts, star)
+
+
+def parse_wind(metar: object) -> tuple[WindKind, int | None]:
+    """電文の最初の風の群から、風向の種類と風向（度、真方位）を読む。
+
+    TEMPO・BECMG のあとの群は予報なので使わない（最初の群だけを見る）。
+    """
+    if not isinstance(metar, str):
+        return "missing", None
+    group = next((token for token in metar.split() if _WIND_GROUP.match(token)), None)
+    if group is None:
+        return "missing", None
+    if _CALM.match(group):
+        return "calm", None
+    direction = group[:3]
+    if direction == "VRB":
+        return "variable", None
+    if not direction.isdigit() or "/" in group:
+        return "missing", None
+    return "direction", int(direction)
+
+
+def _wind_sector(kind: WindKind, direction: int | None) -> str | None:
+    if kind in ("calm", "variable"):
+        return "calm_variable"
+    if direction is None:
+        return None
+    return WIND_SECTORS[int((direction + 22.5) // 45) % 8]
+
+
+def wind_direction_share(observations: pd.DataFrame) -> pd.DataFrame:
+    """風配図：METAR の風向の 8 方位と「静穏・不定」の割合。風の値が欠けた行は除く。"""
+    sectors = pd.Series(
+        [_wind_sector(*parse_wind(metar)) for metar in observations["metar"]],
+        index=observations.index,
+        dtype="object",
+    )
+    known = sectors.notna()
+    counts = (
+        pd.crosstab(observations.loc[known, "city"], sectors[known])
+        .reindex(columns=list(WIND_SECTORS), fill_value=0)
+        .astype("float64")
+    )
+    shares = counts.div(counts.sum(axis=1), axis=0)
+    shares.index.name = "city"
+    shares.columns.name = None
+    return shares.reset_index().melt(id_vars="city", var_name="sector", value_name="share")
 
 
 def _rounded(value: object, digits: int) -> float | None:
@@ -218,17 +361,27 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
     reanalysis = _lookup(
         monthly_temperature_c(observations, "reanalysis"), city, "month", "temperature_c"
     )
+    dew = _lookup(monthly_dew_point_c(observations), city, "month", "dew_point_c")
+    wind = _lookup(monthly_wind_speed_ms(observations), city, "month", "wind_speed_ms")
     wet = _lookup(monthly_wet_days(observations), city, "month", "days")
     observed = _lookup(monthly_precipitation_observed_days(observations), city, "month", "days")
     low = _lookup(monthly_low_ceiling_share(observations), city, "month", "share")
+    star = _lookup(monthly_star_nights(observations), city, "month", "days")
+    ice = _lookup(monthly_ice_days(observations), city, "month", "days")
+    beer = _lookup(monthly_beer_days(observations), city, "month", "days")
     monthly = [
         {
             "month": month,
             "temperature_c_metar": _rounded(metar.get(month), 1),
             "temperature_c_reanalysis": _rounded(reanalysis.get(month), 1),
+            "dew_point_c_metar": _rounded(dew.get(month), 1),
+            "wind_speed_ms_reanalysis": _rounded(wind.get(month), 1),
             "wet_days_1mm": _rounded(wet.get(month), 1),
             "precipitation_observed_days": _rounded(observed.get(month), 1),
             "low_ceiling_share": _rounded(low.get(month), 3),
+            "star_nights": _rounded(star.get(month), 1),
+            "ice_days": _rounded(ice.get(month), 1),
+            "beer_days": _rounded(beer.get(month), 1),
         }
         for month in _MONTHS
     ]
@@ -249,7 +402,15 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
 
     shares = _lookup(cloud_cover_share(observations), city, "band", "share")
     cloud = {band: _rounded(shares.get(band), 3) for band in CLOUD_COVER_BANDS}
-    return {"monthly": monthly, "yearly": yearly, "cloud_cover_share": cloud}
+    wet_total = _lookup(yearly_wet_days(observations), city, "city", "days")
+    winds = _lookup(wind_direction_share(observations), city, "sector", "share")
+    return {
+        "monthly": monthly,
+        "yearly": yearly,
+        "cloud_cover_share": cloud,
+        "wet_days_1mm_per_year": _rounded(wet_total.get(city), 1),
+        "wind_direction_share": {sector: _rounded(winds.get(sector), 3) for sector in WIND_SECTORS},
+    }
 
 
 def climate_summary(observations: pd.DataFrame, years: Iterable[int], mode: str) -> dict[str, Any]:

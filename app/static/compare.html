@@ -25,6 +25,24 @@
       <p class="note">実線は空港の観測（METAR）、破線は再解析（Open-Meteo）。2 つのずれの理由は調べていません（再解析は、広いマス目の平均です）。</p>
     </section>
 
+    <section class="card wide" aria-labelledby="dew-title">
+      <h2 id="dew-title">月ごとの平均の露点（℃）<span class="badge">実測</span></h2>
+      <svg id="dew-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均の露点"></svg>
+      <p class="note">露点は、空気中の水蒸気の量を表す温度です。高いほど水蒸気が多く、むしむしします。空港の観測（METAR）の正時の値の平均です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="wind-title">
+      <h2 id="wind-title">月ごとの平均風速（m/s）<span class="badge">再解析</span></h2>
+      <svg id="wind-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの平均風速"></svg>
+      <p class="note">Open-Meteo の過去データの風速（wind_speed_10m）の、1 時間ごとの値の平均です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="rose-title">
+      <h2 id="rose-title">風向の分布（風配図）<span class="badge">実測</span></h2>
+      <div id="wind-roses" class="pies"></div>
+      <p class="note">空港の観測（METAR）の正時の電文から読んだ、風が吹いてくる方向の割合です。くさびが長いほど、その方向から吹く時間が多いことを表します（2 都市で同じ目盛り）。静穏（1 kt 未満）と、向きの定まらない風（VRB）は図に入れず、下に割合を書いています。</p>
+    </section>
+
     <section class="card wide" aria-labelledby="yearly-title">
       <h2 id="yearly-title">年ごとの降水量（mm）<span class="badge">再解析</span></h2>
       <svg id="yearly-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="年ごとの降水量"></svg>
@@ -34,6 +52,7 @@
     <section class="card wide" aria-labelledby="wet-title">
       <h2 id="wet-title">月ごとの 1 mm 以上の雨の日数（日）<span class="badge">再解析</span></h2>
       <svg id="wet-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの 1 mm 以上の雨の日数"></svg>
+      <p id="wet-total" class="total"></p>
       <p class="note">現地の日付で区切った 1 日の降水量が 1 mm 以上の日。年あたりの平均です。</p>
     </section>
 
@@ -47,6 +66,26 @@
       <h2 id="cloud-title">雲量（空を覆う割合）の分布<span class="badge">再解析</span></h2>
       <div id="cloud-charts" class="pies"></div>
       <p class="note">1 時間ごとの雲量を 4 つに分けた時間の割合です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="star-title">
+      <h2 id="star-title">月ごとの星空日和の夜の数（夜）<span class="badge">再解析</span></h2>
+      <svg id="star-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとの星空日和の夜の数"></svg>
+      <p class="note">このサイト独自の目安です（ほかのサイトの「星空指数」とは別のものです）。空が十分に暗い時間（太陽が −18° より下）の正時のうち、雲量（Open-Meteo の過去データ）が 25 % 未満の時間が半分以上ある夜を数えました。年あたりの平均で、夜は夕方の日付の月に入れています。月の明るさと街の明かりは入れていません。</p>
+      <p class="note">ベルリンは夏至のころ、太陽が −18° まで沈まない（空が十分に暗くならない）ので、その夜は数えていません。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="ice-title">
+      <h2 id="ice-title">月ごとのアイス日和の日数（日）<span class="badge">実測</span></h2>
+      <svg id="ice-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとのアイス日和の日数"></svg>
+      <p class="note">このサイト独自の目安です（ほかのサイトの「アイス指数」とは別のものです）。日最高気温が 25 ℃以上（気象庁の「夏日」の基準）で、降水を観測しなかった日を数えました。年あたりの平均です。</p>
+    </section>
+
+    <section class="card wide" aria-labelledby="beer-title">
+      <h2 id="beer-title">月ごとのビール日和の日数（日）<span class="badge">実測</span></h2>
+      <svg id="beer-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="月ごとのビール日和の日数"></svg>
+      <p class="note">このサイト独自の目安です（ほかのサイトの「ビール指数」とは別のものです）。日最高気温が 30 ℃以上（気象庁の「真夏日」の基準）の日を数えました。年あたりの平均です。</p>
+      <p class="note">日最高気温は、空港の観測（METAR）の正時の値のうち、いちばん高いものです。正時のあいだの最高は入らないので、気象庁の日最高気温より低めになることがあります。気温の欠けた日は数えていません。</p>
     </section>
 
     <section class="card wide" aria-labelledby="ceiling-title">

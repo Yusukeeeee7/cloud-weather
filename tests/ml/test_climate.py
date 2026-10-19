@@ -1,13 +1,16 @@
 """#25 気候の比較ページ：`ml/climate.py` の集計。表は手で書いた小さなもの。"""
 
+import csv
 import json
 import math
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import pytest
 
 from ml import climate
+from tests.conftest import FIXTURES_DIR
+from tests.solar_refs import usno_twilight
 
 
 def _hours(city: str, start: str, count: int, **columns: list[object]) -> pd.DataFrame:
@@ -121,6 +124,63 @@ def test_monthly_temperature_uses_local_month() -> None:
     result = climate.monthly_temperature_c(table, "metar")
 
     assert _as_dict(result, "month", "temperature_c") == {2: 5.0}
+
+
+# 追加 2 の③：露点
+def test_monthly_dew_point_skips_missing() -> None:
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 3, metar_dew_point_c=[-2.0, 4.0, None]),
+        _hours("tokyo", "2025-02-10T00:00", 1, metar_dew_point_c=[7.5]),
+    )
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {1: 1.0, 2: 7.5}
+    assert set(result["city"]) == {"tokyo"}
+
+
+def test_monthly_dew_point_drops_month_without_values() -> None:
+    # 2 月の行はあるが、露点がすべて欠けている。0 ℃ ではなく、その月の値なし（JSON では null）。
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 1, metar_dew_point_c=[2.0]),
+        _hours("tokyo", "2025-02-10T00:00", 2, metar_dew_point_c=[None, None]),
+    )
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {1: 2.0}
+
+
+def test_monthly_dew_point_uses_local_month() -> None:
+    # UTC では 1 月 31 日 15 時、東京では 2 月 1 日 0 時。
+    table = _hours("tokyo", "2025-01-31T15:00", 1, metar_dew_point_c=[3.0])
+
+    result = climate.monthly_dew_point_c(table)
+
+    assert _as_dict(result, "month", "dew_point_c") == {2: 3.0}
+
+
+# 追加 2 の④：風速
+def test_monthly_wind_speed_skips_missing() -> None:
+    table = _concat(
+        _hours("tokyo", "2025-01-10T00:00", 3, wind_speed_ms=[2.0, 5.0, None]),
+        _hours("tokyo", "2025-02-10T00:00", 1, wind_speed_ms=[4.5]),
+        _hours("tokyo", "2025-03-10T00:00", 1, wind_speed_ms=[None]),
+    )
+
+    result = climate.monthly_wind_speed_ms(table)
+
+    assert _as_dict(result, "month", "wind_speed_ms") == {1: 3.5, 2: 4.5}
+    assert set(result["city"]) == {"tokyo"}
+
+
+def test_monthly_wind_speed_uses_local_month() -> None:
+    # UTC では 1 月 31 日 15 時、東京では 2 月 1 日 0 時。
+    table = _hours("tokyo", "2025-01-31T15:00", 1, wind_speed_ms=[3.0])
+
+    result = climate.monthly_wind_speed_ms(table)
+
+    assert _as_dict(result, "month", "wind_speed_ms") == {2: 3.0}
 
 
 # 5
@@ -323,6 +383,235 @@ def test_is_precipitation(codes: str | None, expected: bool) -> None:
     assert climate.is_precipitation(codes) is expected
 
 
+# 追加 2 の⑥：星空日和の夜。暗い時間（太陽が −18° より下）は USNO の天文薄明の表で決める。
+_CLOUDY = 90.0
+_CLEAR = 10.0
+
+
+def _night_table(
+    city: str, day: date, clear_dark: int, clear_value: float = _CLEAR
+) -> tuple[pd.DataFrame, int]:
+    """`day` の 0 時（UTC）から 48 時間。
+
+    `day` の夜の暗い正時のうち、先頭の `clear_dark` 個を晴れにする。
+
+    昼（暗くない時間）は晴れ、ほかの夜の暗い時間は曇り。戻り値は表と、`day` の夜の暗い正時の数。
+    """
+    twilight = usno_twilight(city, "astronomical")
+    dusk, dawn = twilight[day][1], twilight[day + timedelta(days=1)][0]
+    assert dusk is not None and dawn is not None
+    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    times = [start + timedelta(hours=hour) for hour in range(48)]
+    # USNO は分単位で、こちらの計算とは ±2 分ずれうる。境目の近くの正時は使わない。
+    margin = timedelta(minutes=2)
+    assert all(abs(at - dusk) > margin and abs(at - dawn) > margin for at in times)
+    night = [dusk < at < dawn for at in times]
+    others = [usno_twilight(city, "astronomical")[at.date()] for at in times]
+    dark_anywhere = [
+        (end is not None and at > end) or (begin is not None and at < begin)
+        for at, (begin, end) in zip(times, others, strict=True)
+    ]
+    cloud: list[float] = []
+    clear_left = clear_dark
+    for in_night, dark in zip(night, dark_anywhere, strict=True):
+        if in_night:
+            cloud.append(clear_value if clear_left > 0 else _CLOUDY)
+            clear_left -= 1
+        else:
+            cloud.append(_CLOUDY if dark else _CLEAR)
+    return _hours(city, start.isoformat(), 48, cloud_cover=cloud), sum(night)
+
+
+# 「ちょうど半分」を作れるように、暗い正時が偶数の夜を使う。
+_EVEN_NIGHT = date(2026, 4, 15)
+
+
+def test_star_nights_half_clear_is_star() -> None:
+    _, dark = _night_table("tokyo", _EVEN_NIGHT, 0)
+    assert dark % 2 == 0
+    table, _ = _night_table("tokyo", _EVEN_NIGHT, dark // 2)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {4: 1.0}
+
+
+def test_star_nights_less_than_half_clear_is_not_star() -> None:
+    _, dark = _night_table("tokyo", _EVEN_NIGHT, 0)
+    assert dark % 2 == 0
+    table, _ = _night_table("tokyo", _EVEN_NIGHT, dark // 2 - 1)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {4: 0.0}
+
+
+def test_star_nights_daytime_clear_does_not_count() -> None:
+    # 昼はすべて晴れ、夜の暗い時間はすべて曇り。
+    table, _ = _night_table("tokyo", date(2026, 1, 15), 0)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {1: 0.0}
+
+
+def test_star_nights_cloud_cover_boundary() -> None:
+    # 25 % 未満が晴れ。25.0 は晴れではない。
+    clear, _ = _night_table("tokyo", date(2026, 1, 15), 48, clear_value=24.9)
+    edge, _ = _night_table("tokyo", date(2026, 1, 15), 48, clear_value=25.0)
+
+    assert _as_dict(climate.monthly_star_nights(clear), "month", "days") == {1: 1.0}
+    assert _as_dict(climate.monthly_star_nights(edge), "month", "days") == {1: 0.0}
+
+
+def test_star_nights_without_darkness_are_not_star() -> None:
+    # ベルリンの夏至の前後は、太陽が −18° まで沈まない（USNO の表で「////」）。
+    # 空がずっと晴れでも数えない。
+    twilight = usno_twilight("berlin", "astronomical")
+    days = [date(2026, 6, 20) + timedelta(days=n) for n in range(4)]
+    assert all(twilight[day] == (None, None) for day in days)
+    table = _hours("berlin", "2026-06-21T00:00", 48, cloud_cover=[_CLEAR] * 48)
+
+    result = climate.monthly_star_nights(table)
+
+    assert _as_dict(result, "month", "days") == {6: 0.0}
+
+
+# 追加 2 の⑦：アイス日和・ビール日和。日最高気温は METAR の正時の値の最大。
+# 25 ℃・30 ℃は気象庁の「夏日」「真夏日」（日最高気温が 25 度・30 度以上の日）。
+def _metar_day(local_day: str, high: float, codes: str | None = None) -> pd.DataFrame:
+    """東京の現地の 1 日（24 行）。
+
+    最高気温は 12 時の `high`、ほかは 10.0。`codes` は 15 時の天気。
+    """
+    start = pd.Timestamp(local_day, tz="Asia/Tokyo").tz_convert("UTC")
+    temperatures = [10.0] * 24
+    temperatures[12] = high
+    weather: list[object] = [None] * 24
+    weather[15] = codes
+    return _hours(
+        "tokyo",
+        str(start),
+        24,
+        metar_temperature_c=temperatures,
+        weather_codes=weather,
+        precipitation_mm=[0.0] * 24,
+    )
+
+
+def test_daily_max_temperature_uses_local_day_and_complete_days() -> None:
+    full = _metar_day("2025-07-10", 28.0)
+    missing = _metar_day("2025-07-11", 31.0)
+    missing.loc[missing.index[3], "metar_temperature_c"] = None
+    partial = _metar_day("2025-07-12", 33.0).iloc[:23]
+
+    result = climate.daily_max_temperature_c(_concat(full, missing, partial))
+
+    assert _as_dict(result, "local_date", "max_temperature_c") == {date(2025, 7, 10): 28.0}
+
+
+def test_ice_days_threshold_and_precipitation() -> None:
+    table = _concat(
+        _metar_day("2025-07-10", 24.9),
+        _metar_day("2025-07-11", 25.0),
+        _metar_day("2025-07-12", 26.0, codes="-RA"),
+        _metar_day("2025-07-13", 26.0, codes="BR"),
+    )
+
+    result = climate.monthly_ice_days(table)
+
+    # 25.0 ℃（境目）と、霧（BR。降水ではない）の日の 2 日。
+    assert _as_dict(result, "month", "days") == {7: 2.0}
+
+
+def test_beer_days_threshold_ignores_precipitation() -> None:
+    table = _concat(
+        _metar_day("2025-07-10", 29.9),
+        _metar_day("2025-07-11", 30.0),
+        _metar_day("2025-07-12", 31.0, codes="+TSRA"),
+    )
+
+    result = climate.monthly_beer_days(table)
+
+    assert _as_dict(result, "month", "days") == {7: 2.0}
+
+
+# 追加 2 の⑧：風配図。METAR の電文の風の群（WMO-No. 782 の 2 節。spec 7「METAR の風」）。
+def _iem_sample_rows() -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for path in sorted((FIXTURES_DIR / "data_raw" / "iem").glob("*.csv")):
+        with path.open(encoding="utf-8", newline="") as file:
+            rows.extend(csv.DictReader(file))
+    return rows
+
+
+def test_parse_wind_matches_iem_direction() -> None:
+    # 期待値は IEM の `drct`（同じ行の電文から IEM が読んだ値。真北からの度）。
+    # VRB の行は `drct` が空。
+    rows = _iem_sample_rows()
+    directions = [row for row in rows if row["drct"]]
+    variables = [row for row in rows if " VRB" in row["metar"]]
+    assert directions and variables
+
+    for row in directions:
+        assert climate.parse_wind(row["metar"]) == ("direction", round(float(row["drct"])))
+    for row in variables:
+        assert row["drct"] == ""
+        assert climate.parse_wind(row["metar"]) == ("variable", None)
+
+
+@pytest.mark.parametrize(
+    ("metar", "expected"),
+    [
+        ("RJTT 191200Z 21013KT 180V240 CAVOK 24/18 Q1019", ("direction", 210)),
+        ("EDDB 191250Z AUTO 07010KT 040V110 CAVOK", ("direction", 70)),
+        ("XXXX 211025Z 31015G27KT 280V350 9999", ("direction", 310)),
+        ("XXXX 211025Z 27006MPS 9999", ("direction", 270)),
+        ("XXXX 211025Z 36010KT 9999", ("direction", 360)),
+        # 静穏・向きの定まらない風・欠けた値（WMO-No. 782 の例）。
+        ("XXXX 211025Z 00000KT 9999", ("calm", None)),
+        ("XXXX 211025Z VRB02KT 9999", ("variable", None)),
+        ("XXXX 211025Z VRB28KT 9999", ("variable", None)),
+        ("XXXX 211025Z ///05KT 9999", ("missing", None)),
+        ("XXXX 211025Z 270//KT 9999", ("missing", None)),
+        ("XXXX 211025Z /////KT 9999", ("missing", None)),
+        # 最初の風の群だけを使う（TEMPO・BECMG のあとの風は予報）。
+        ("XXXX 211025Z 09005KT CAVOK TEMPO 27015KT", ("direction", 90)),
+        ("XXXX 211025Z CAVOK", ("missing", None)),
+        ("", ("missing", None)),
+        (None, ("missing", None)),
+    ],
+)
+def test_parse_wind(metar: str | None, expected: tuple[str, int | None]) -> None:
+    assert climate.parse_wind(metar) == expected
+
+
+def test_wind_direction_share_sectors() -> None:
+    # 8 方位は 45° ずつで、北は 337.5° 以上・22.5° 未満。
+    # 静穏と VRB は 1 つにまとめ、欠けた値は除く。
+    metars = [
+        "X 000000Z 02005KT",
+        "X 000000Z 03005KT",
+        "X 000000Z 36005KT",
+        "X 000000Z 18005KT",
+        "X 000000Z 34005KT",
+        "X 000000Z 00000KT",
+        "X 000000Z VRB02KT",
+        "X 000000Z ///05KT",
+    ]
+    table = _hours("tokyo", "2025-01-10T00:00", len(metars), metar=metars)
+
+    result = climate.wind_direction_share(table)
+
+    shares = _as_dict(result, "sector", "share")
+    assert set(shares) == set(climate.WIND_SECTORS)
+    assert shares["N"] == pytest.approx(3 / 7)
+    assert shares["NE"] == pytest.approx(1 / 7)
+    assert shares["S"] == pytest.approx(1 / 7)
+    assert shares["calm_variable"] == pytest.approx(2 / 7)
+    assert shares["E"] == shares["SE"] == shares["SW"] == shares["W"] == shares["NW"] == 0.0
+
+
 def test_precipitation_observed_days_average_per_year() -> None:
     def day(local_day: str, codes: list[str | None]) -> pd.DataFrame:
         table = _tokyo_day(local_day)
@@ -345,10 +634,36 @@ def test_precipitation_observed_days_average_per_year() -> None:
     assert _as_dict(observed, "month", "days") == {3: 1.5}
 
 
+# 追加：1 年あたりの合計
+def test_yearly_wet_days_sums_monthly_averages() -> None:
+    # 1 月は 2 年ぶん（2 日と 1 日 → 年あたり 1.5 日）、2 月は 1 年ぶん（1 日）。合計は 2.5 日。
+    table = _concat(
+        _wet_day("2024-01-10", 1.0),
+        _wet_day("2024-01-11", 2.0),
+        _wet_day("2025-01-10", 1.5),
+        _wet_day("2025-01-11", 0.0),
+        _wet_day("2025-02-10", 3.0),
+    )
+
+    total = climate.yearly_wet_days(table)
+
+    assert _as_dict(total, "city", "days") == {"tokyo": 2.5}
+
+
+def test_yearly_wet_days_uses_threshold_boundary() -> None:
+    table = _concat(_wet_day("2025-01-10", 0.99), _wet_day("2025-02-10", 1.0))
+
+    total = climate.yearly_wet_days(table)
+
+    assert _as_dict(total, "city", "days") == {"tokyo": 1.0}
+
+
 def _summary_hours(city: str, start: str, count: int) -> pd.DataFrame:
     table = _layer_rows(city, start, [("XXXX 000000Z CAVOK", None, None)] * count)
     table["metar_temperature_c"] = 10.0
+    table["metar_dew_point_c"] = 4.0
     table["temperature_c"] = 11.0
+    table["wind_speed_ms"] = 3.0
     table["precipitation_mm"] = 0.0
     table["cloud_cover"] = 50.0
     table["weather_codes"] = None
@@ -370,17 +685,39 @@ def test_climate_summary_keys() -> None:
     assert summary["period"] == {"start": "2025-01-01", "end": "2025-12-31", "dates": "local"}
     assert set(summary["cities"]) == {"tokyo", "berlin"}
     for city in summary["cities"].values():
-        assert set(city) == {"monthly", "yearly", "cloud_cover_share"}
+        assert set(city) == {
+            "monthly",
+            "yearly",
+            "cloud_cover_share",
+            "wet_days_1mm_per_year",
+            "wind_direction_share",
+        }
+        # 電文に風の群がない表なので、風配図の値はない（null）。
+        assert city["wind_direction_share"] == dict.fromkeys(climate.WIND_SECTORS)
+        assert city["wet_days_1mm_per_year"] == 0.0
         assert [row["month"] for row in city["monthly"]] == list(range(1, 13))
         assert set(city["monthly"][0]) == {
             "month",
             "temperature_c_metar",
             "temperature_c_reanalysis",
+            "dew_point_c_metar",
+            "wind_speed_ms_reanalysis",
+            "star_nights",
+            "ice_days",
+            "beer_days",
             "wet_days_1mm",
             "precipitation_observed_days",
             "low_ceiling_share",
         }
         assert city["monthly"][0]["temperature_c_metar"] == 10.0
+        assert city["monthly"][0]["dew_point_c_metar"] == 4.0
+        assert city["monthly"][0]["wind_speed_ms_reanalysis"] == 3.0
+        # 雲量 50 % の表なので、星空日和の夜はない（データのある 1 月は 0、ない月は null）。
+        assert city["monthly"][0]["star_nights"] == 0.0
+        assert city["monthly"][5]["star_nights"] is None
+        # 気温 10 ℃の表なので、アイス日和・ビール日和はない。
+        assert city["monthly"][0]["ice_days"] == 0.0
+        assert city["monthly"][0]["beer_days"] == 0.0
         assert city["monthly"][0]["low_ceiling_share"] == 0.0
         # データのない月は null。
         assert city["monthly"][5]["temperature_c_metar"] is None
@@ -435,3 +772,29 @@ def test_climate_summary_rounds_values() -> None:
     assert summary["cities"]["tokyo"]["monthly"][0]["temperature_c_metar"] == 10.0
     share = summary["cities"]["tokyo"]["cloud_cover_share"]
     assert share["0-25"] == round(1 / 48, 3)
+
+
+def test_climate_summary_has_wet_days_per_year() -> None:
+    # 東京の 2025-01-10 だけ 1 mm 以上（1.04 mm）。1 月が 1 日で、合計は 1.0 日。
+    table = _summary_table()
+    table.loc[table.index[0], "precipitation_mm"] = 1.04
+
+    summary = climate.climate_summary(table, years=[2025], mode="sample")
+
+    assert summary["cities"]["tokyo"]["wet_days_1mm_per_year"] == 1.0
+    assert summary["cities"]["berlin"]["wet_days_1mm_per_year"] == 0.0
+
+
+def test_climate_summary_has_wind_direction_share() -> None:
+    # 東京の 48 行のうち 1 行だけ北東の風、残りは静穏。割合は小数 3 桁。
+    table = _summary_table()
+    tokyo = table.index[table["city"] == "tokyo"]
+    table.loc[tokyo, "metar"] = "RJTT 000000Z 00000KT CAVOK"
+    table.loc[tokyo[0], "metar"] = "RJTT 000000Z 05005KT CAVOK"
+
+    summary = climate.climate_summary(table, years=[2025], mode="sample")
+
+    share = summary["cities"]["tokyo"]["wind_direction_share"]
+    assert share["NE"] == round(1 / 48, 3)
+    assert share["calm_variable"] == round(47 / 48, 3)
+    assert share["N"] == 0.0

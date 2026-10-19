@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.cities import City
+from app.clients.open_meteo import HOURLY_VARIABLES
 from app.errors import UpstreamError
 from app.services.weather import build_weather_response
 from tests.conftest import FIXED_NOW, RawForecast
@@ -20,6 +21,7 @@ HOURLY_FIELDS = [
     "cloud_cover_low",
     "cloud_cover_mid",
     "cloud_cover_high",
+    "wind_speed_10m",
 ]
 DAILY_FIELDS = [
     "time",
@@ -61,7 +63,10 @@ def test_fixture_contract_hourly_daily(
     assert raw["hourly_units"]["precipitation_probability"] == "%"
     assert raw["daily_units"]["temperature_2m_max"] == "°C"
     assert raw["daily_units"]["precipitation_sum"] == "mm"
-    assert set(raw["hourly"]) == set(HOURLY_FIELDS)
+    assert raw["hourly_units"]["wind_speed_10m"] == "m/s"
+    # いまの取得と同じ項目（/cloud-base・/sunshine に使う項目も入っている）。
+    assert set(raw["hourly"]) == {"time", *HOURLY_VARIABLES}
+    assert set(HOURLY_FIELDS) <= set(raw["hourly"])
     assert set(raw["daily"]) == set(DAILY_FIELDS)
     assert {len(column) for column in raw["hourly"].values()} == {len(raw["hourly"]["time"])}
     assert {len(column) for column in raw["daily"].values()} == {7}
@@ -126,6 +131,7 @@ def test_service_hourly_maps_fixture_values(forecast: Forecast, city: City) -> N
         assert item.cloud_cover.low == source["cloud_cover_low"][row]
         assert item.cloud_cover.mid == source["cloud_cover_mid"][row]
         assert item.cloud_cover.high == source["cloud_cover_high"][row]
+        assert item.wind_speed_ms == source["wind_speed_10m"][row]
 
 
 def test_service_hourly_crosses_local_midnight(forecast: Forecast) -> None:
@@ -354,6 +360,8 @@ def test_service_section_absent_raises_upstream_error(forecast: Forecast, sectio
         ("precipitation_probability", "20"),
         ("precipitation_probability", 20.5),
         ("cloud_cover", 4.5),
+        ("wind_speed_10m", "3.4"),
+        ("wind_speed_10m", True),
         ("weather_code", "0"),
         ("time", "2026-10-13T00:00"),
         ("time", True),

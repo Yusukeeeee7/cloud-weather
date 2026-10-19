@@ -37,6 +37,7 @@ class _RawHourly(_Strict):
     cloud_cover_low: list[int]
     cloud_cover_mid: list[int]
     cloud_cover_high: list[int]
+    wind_speed_10m: list[float]
 
 
 class _RawDaily(_Strict):
@@ -140,6 +141,7 @@ def build_hourly(raw: Mapping[str, Any], now: datetime) -> list[HourlyForecast]:
             temperature_c=hourly.temperature_2m[row],
             precipitation_probability=hourly.precipitation_probability[row],
             precipitation_mm=hourly.precipitation[row],
+            wind_speed_ms=hourly.wind_speed_10m[row],
             cloud_cover=CloudCover(
                 total=hourly.cloud_cover[row],
                 low=hourly.cloud_cover_low[row],

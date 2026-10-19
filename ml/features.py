@@ -87,8 +87,8 @@ def _cyclic(values: pd.Series, period: float) -> tuple[pd.Series, pd.Series]:
     return angle.map(math.sin).astype("float64"), angle.map(math.cos).astype("float64")
 
 
-def _solar_elevation_deg(observations: pd.DataFrame) -> pd.Series:
-    """その都市・その時刻の太陽の高度（`/daylight` と同じ計算）。"""
+def solar_elevation_series(observations: pd.DataFrame) -> pd.Series:
+    """その都市・その時刻の太陽の高度（`/daylight` と同じ計算）。`ml/climate.py` でも使う。"""
     places = {name: CITIES[City(name)] for name in observations["city"].unique()}
     values = [
         solar_elevation_deg(places[name].latitude, places[name].longitude, at)
@@ -118,7 +118,7 @@ def features(observations: pd.DataFrame) -> pd.DataFrame:
         local_hour_cos=hour_cos,
         day_of_year_sin=day_sin,
         day_of_year_cos=day_cos,
-        solar_elevation_deg=_solar_elevation_deg(observations),
+        solar_elevation_deg=solar_elevation_series(observations),
         city_code=observations["city"].map(codes).astype("int64"),
     )
     return table[list(FEATURE_NAMES)]

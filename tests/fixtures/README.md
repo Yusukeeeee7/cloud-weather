@@ -14,6 +14,27 @@
 https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&timezone=<タイムゾーン>&timeformat=unixtime
 ```
 
+## `/weather` の入力（#25 の追加で取り直したもの）
+
+`/weather` の `hourly` に風速（`wind_speed_ms`）を足すため、いまのアプリ（`app/clients/open_meteo.py`）と同じ URL で取り直した（応答は取得したまま）。
+`/weather` のテストは、上の 4 つではなく、こちらを使う（`tests/conftest.py` の `load_forecast`・`load_forecast_iso8601`）。
+上の 4 つは、「4 項目のない保存値」のテスト（`load_legacy_forecast`・`LEGACY_NOW`）に残している。
+
+| ファイル | 取得日時（UTC） | 取得方法 |
+|---|---|---|
+| `open_meteo/forecast_tokyo_wind.json` | 2026-10-19T18:25:57Z〜18:25:58Z | `curl`、下の URL（`latitude=35.55&longitude=139.78`、`timezone=Asia/Tokyo`、`timeformat=unixtime`） |
+| `open_meteo/forecast_tokyo_wind_iso8601.json` | 同上 | 同上で `timeformat` の指定なし |
+| `open_meteo/forecast_berlin_wind.json` | 2026-10-19T18:25:57Z | `curl`、下の URL（`latitude=52.36&longitude=13.5`、`timezone=Europe/Berlin`、`timeformat=unixtime`） |
+| `open_meteo/forecast_berlin_wind_iso8601.json` | 同上 | 同上で `timeformat` の指定なし |
+
+```
+https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,dew_point_2m,relative_humidity_2m,pressure_msl,wind_speed_10m,sunshine_duration,direct_radiation,diffuse_radiation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&wind_speed_unit=ms&forecast_days=7&past_hours=24&forecast_hours=168&latitude=<緯度>&longitude=<経度>&timezone=<タイムゾーン>[&timeformat=unixtime]
+```
+
+- 4 つとも 200。`hourly` は 192 行で null はない。先頭は 2 都市とも 2026-10-18T18:00Z、最後は 2026-10-26T17:00Z。`hourly_units.wind_speed_10m` は `m/s`。
+- `current.time` は 2026-10-19T18:15Z。東京の `daily` の先頭は 2026-10-20、ベルリンは 2026-10-19（7 日の間に夏時間の終わり 10-25 をまたぐ）。
+- `tests/conftest.py` の `FIXED_NOW` を取得時刻の直後（2026-10-19T18:26:00.123456Z）に合わせている。取り直したら変える。
+
 ## 雲底高度の予測（#12 推論API）の入力
 
 `/cloud-base` は、`hourly` に 4 項目（`dew_point_2m`・`relative_humidity_2m`・`pressure_msl`・`wind_speed_10m`）を
@@ -27,7 +48,7 @@ https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&curr
 
 - `hourly` は 168 行で null はない。東京の先頭は 2026-10-12T15:00Z（現地の 10-13 の 0 時）、ベルリンは 2026-10-12T22:00Z。
 - `tests/conftest.py` の `CLOUD_BASE_NOW` を取得時刻に合わせている。取り直したら変える。
-- 東京の先頭の行（2026-10-12T15:00Z）は、上の fixture の取得時刻（`FIXED_NOW`）の正時と同じ。
+- 東京の先頭の行（2026-10-12T15:00Z）は、上の古い fixture の取得時刻（`LEGACY_NOW`。#25 の追加の前は `FIXED_NOW`）の正時と同じ。
   「4 項目のない保存値があるときに呼び直す」テストがこれに頼っているので、取り直すときは気をつける。
 
 ## 過去 24 時間の雲量（#15 UI）の入力
@@ -94,18 +115,19 @@ https://api.open-meteo.com/v1/forecast?latitude=<緯度>&longitude=<経度>&curr
 
 ## 2 種類ある理由
 
-- `forecast_<city>.json`：アプリが実際に受け取る形（時刻が UNIX 秒）。
-- `forecast_<city>_iso8601.json`：同じ時刻に、時刻形式だけ変えて取得したもの。`daily.time` に
+- `forecast_<city>_wind.json`（いまの `/weather` のテスト）・`forecast_<city>.json`（#12 より前の形）：アプリが実際に受け取る形（時刻が UNIX 秒）。
+- `forecast_<city>_wind_iso8601.json`・`forecast_<city>_iso8601.json`：それぞれ同じ時刻に、時刻形式だけ変えて取得したもの。`daily.time` に
   Open-Meteo が区切った **現地の日付** が文字列で入っているので、日付の期待値として使う。
-  時刻以外の値は 2 つのファイルで一致している。
+  時刻以外の値は 2 つのファイルで一致している（`_wind` の組は 2026-10-19 に `current`・`hourly`・`daily` を比べて確かめた）。
 
 ## 取得した時刻について
 
-- 東京は、**現地の日付（10-13）が UTC の日付（10-12）より進んでいる時刻** に取得している。
+- 東京は、**現地の日付が UTC の日付より進んでいる時刻** に取得している。
   「日付を UTC ではなく現地で区切る」ことを確かめるため。
-- ベルリンは同じ時刻（現地 17:02）で、現地と UTC の日付は同じ（10-12）。
-- `hourly` の 24 件は時計に依存するため、`tests/conftest.py` の `FIXED_NOW` を取得時刻に合わせている。
-  fixture を取り直したら `FIXED_NOW` も変える。
+  `_wind` の組は現地 10-20 03:25 ごろ（UTC 10-19）、古い組は現地 10-13（UTC 10-12）。
+- ベルリンは同じ時刻で、現地と UTC の日付は同じ（`_wind` の組は現地 10-19 20:25 ごろ、古い組は現地 10-12 17:02）。
+- `hourly` の 24 件は時計に依存するため、`tests/conftest.py` の `FIXED_NOW`（`_wind` の組）と `LEGACY_NOW`（古い組）を取得時刻に合わせている。
+  fixture を取り直したら、これらも変える。
 
 出典：[Weather data by Open-Meteo.com](https://open-meteo.com/)（CC BY 4.0）
 

@@ -103,6 +103,40 @@ def test_static_script_does_not_use_inner_html(name: str) -> None:
     assert "document.write" not in script
 
 
+# #25 の追加 3：読み込み中の表示。
+# 画面の動きは人間がブラウザで確かめる。ここでは部品があることだけを見る。
+def test_app_script_shows_loading_state() -> None:
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "読み込み中…" in script
+    assert '"aria-busy"' in script
+    assert '"status"' in script
+
+
+def test_app_script_shows_hourly_wind_speed() -> None:
+    # 追加 2 の⑤：24 時間の予報の表に、1 時間ごとの風速の列。
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "hour.wind_speed_ms" in script
+
+
+def test_app_script_has_retry_button() -> None:
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "もう一度読み込む" in script
+
+
+def test_spinner_stops_when_reduced_motion() -> None:
+    # 動きを減らす設定では、くるくるを回さない（文字だけにする）。
+    style = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+    reduced = style.split("@media (prefers-reduced-motion: reduce)", 1)
+
+    assert ".spinner" in reduced[0]
+    assert len(reduced) == 2
+    assert ".spinner" in reduced[1]
+    assert "animation: none" in reduced[1]
+
+
 # #25 気候の比較ページ（`GET /compare`）。
 CLIMATE_JSON = STATIC_DIR / "climate.json"
 CLIMATE_CITIES = {"tokyo", "berlin"}
@@ -130,6 +164,56 @@ def test_compare_not_in_openapi(client: TestClient) -> None:
 
     assert "/compare" not in paths
     assert "/" not in paths
+
+
+def test_compare_has_dew_point_chart(client: TestClient) -> None:
+    # 追加 2 の③：月ごとの平均の露点（METAR）の折れ線。
+    text = client.get("/compare").text
+
+    assert 'id="dew-chart"' in text
+    assert '"dew_point_c_metar"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
+def test_compare_has_wind_speed_chart(client: TestClient) -> None:
+    # 追加 2 の④：月ごとの平均風速（再解析）の折れ線。
+    text = client.get("/compare").text
+
+    assert 'id="wind-chart"' in text
+    assert '"wind_speed_ms_reanalysis"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
+def test_compare_has_star_chart(client: TestClient) -> None:
+    # 追加 2 の⑥：月ごとの星空日和の夜の数の棒グラフ。このサイト独自の目安だと書く。
+    text = client.get("/compare").text
+
+    assert 'id="star-chart"' in text
+    assert "このサイト独自の目安" in text
+    assert '"star_nights"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
+def test_compare_has_ice_and_beer_charts(client: TestClient) -> None:
+    # 追加 2 の⑦：アイス日和・ビール日和の棒グラフ。基準の出どころ（気象庁の夏日・真夏日）を書く。
+    text = client.get("/compare").text
+    script = (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+    assert 'id="ice-chart"' in text
+    assert 'id="beer-chart"' in text
+    assert "気象庁" in text
+    assert '"ice_days"' in script
+    assert '"beer_days"' in script
+
+
+def test_compare_has_wind_rose(client: TestClient) -> None:
+    # 追加 2 の⑧：METAR の風の群から作る風配図（都市ごと）。
+    text = client.get("/compare").text
+
+    assert 'id="wind-roses"' in text
+    assert "wind_direction_share" in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
+def test_compare_has_wet_total(client: TestClient) -> None:
+    # 雨の日数のグラフの下に、1 年あたりの合計を出す欄。
+    assert 'id="wet-total"' in client.get("/compare").text
 
 
 def test_compare_script_reads_only_climate_json() -> None:
@@ -168,9 +252,27 @@ def test_climate_json_matches_schema(city: str) -> None:
         assert all(_is_number(row[name]) for name in row)
         assert -40 <= row["temperature_c_metar"] <= 45
         assert -40 <= row["temperature_c_reanalysis"] <= 45
+        # 露点は気温より高くならない（月の平均どうしでも）。
+        assert -60 <= row["dew_point_c_metar"] <= row["temperature_c_metar"]
+        assert 0 <= row["wind_speed_ms_reanalysis"] <= 30
+        assert 0 <= row["star_nights"] <= 31
+        assert 0 <= row["ice_days"] <= 31
+        assert 0 <= row["beer_days"] <= 31
         assert 0 <= row["wet_days_1mm"] <= 31
         assert 0 <= row["precipitation_observed_days"] <= 31
         assert 0 <= row["low_ceiling_share"] <= 1
+    # 追加：1 mm 以上の雨の日数の、1 年あたりの合計。
+    # 月の値（小数 1 桁に丸めたもの）の合計とは、丸めのぶんだけずれうる。
+    total = data["wet_days_1mm_per_year"]
+    assert _is_number(total)
+    assert 0 <= total <= 366
+    assert abs(total - sum(row["wet_days_1mm"] for row in monthly)) <= 0.6
+    # 追加 2 の⑧：風配図。8 方位と、静穏・向きの定まらない風。
+    # 割合の合計は 1（丸めのぶんだけずれうる）。
+    wind = data["wind_direction_share"]
+    assert set(wind) == {"N", "NE", "E", "SE", "S", "SW", "W", "NW", "calm_variable"}
+    assert all(_is_number(value) and 0 <= value <= 1 for value in wind.values())
+    assert sum(wind.values()) == pytest.approx(1, abs=0.005)
 
     yearly = data["yearly"]
     assert [row["year"] for row in yearly] == CLIMATE_YEARS
