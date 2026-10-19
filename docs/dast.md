@@ -19,6 +19,18 @@ CD（`.github/workflows/cd.yml`）は、push の前に、起動した API に OW
 - レポートのフォルダ（`${RUNNER_TEMP}/zap`）は `chmod 777` にする。ZAP のイメージは `zap` ユーザー（uid 1000）で動き、runner のユーザーが作ったフォルダには書けないため（Linux のボリュームで、`chmod` なしでは `Permission denied` になることを手元で確かめた）。
 - 除外の設定は `.zap/api-scan.conf`（`zap-api-scan.py -g` で作ったもの。すべて WARN）。直せない誤検知だけ、そのルールを IGNORE にし、理由をコメントに書く（1 件ずつ）。いまは除外していない。
 
+## CD での初回の実行（2026-10-16T22:17Z、run 38974879281）
+
+PR #48 を main にマージした後の CD。すべての手順が成功し、DAST の後に push・attest まで進んだ。
+
+| 確かめたこと | 結果 |
+|---|---|
+| `DAST (ZAP API scan)` の時間 | 4 分 2 秒（ZAP のイメージの取得を含む） |
+| 取り込まれた URL | 11（`Number of Imported URLs: 11`） |
+| 判定 | `ZAP alert types: Informational: 1, Low: 3, Medium: 0, High: 0` |
+| 警告（ZAP の出力） | Server Error（100000）x 26、Unexpected Content-Type（100001）x 6、X-Content-Type-Options Header Missing（10021）x 2。手元の初回と同じ種類で、対応は下の「初回の結果」のとおり |
+| ジョブ全体の時間 | 5 分 24 秒（上限は 20 分） |
+
 ## 使っているイメージ
 
 - `ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6`（正式版 v2.17.0。2025-12-15 公開）。
