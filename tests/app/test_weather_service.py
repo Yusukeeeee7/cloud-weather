@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -107,6 +108,29 @@ def test_service_null_field_raises_upstream_error(
 ) -> None:
     raw = forecast("tokyo")
     raw["current"][field] = None
+
+    with pytest.raises(UpstreamError):
+        build_weather_response(City.TOKYO, raw, FIXED_NOW)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "temperature_2m",
+        "apparent_temperature",
+        "dew_point_2m",
+        "precipitation",
+        "wind_speed_10m",
+        "wind_direction_10m",
+    ],
+)
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_service_not_finite_field_raises_upstream_error(
+    forecast: Callable[[str], RawForecast], field: str, value: float
+) -> None:
+    # 小数の項目。受け付けると、応答で null になって 200 で返る（#58 のレビュー）。
+    raw = forecast("tokyo")
+    raw["current"][field] = value
 
     with pytest.raises(UpstreamError):
         build_weather_response(City.TOKYO, raw, FIXED_NOW)

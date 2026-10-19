@@ -1,9 +1,9 @@
 import logging
 from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Any
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.errors import UpstreamError
 from app.schemas import CloudCover, DailyForecast, HourlyForecast
@@ -18,14 +18,12 @@ MAX_HOURLY_ROWS = 16 * 24
 _HOUR_S = 3600
 # 壊れた応答として扱う例外（検証エラー、範囲外の UNIX 秒など）。
 INVALID_RESPONSE_ERRORS = (ValidationError, ValueError, OverflowError, OSError)
-# NaN・無限大を受け付けない数値（受け付けると、応答で null になって 200 で返る）。
-# いまは #58 の風向だけに使う（ほかの項目は別の Issue で扱う）。
-FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 
 class _Strict(BaseModel):
     # 数値の文字列や真偽値を数値として受け付けない。
-    model_config = ConfigDict(strict=True)
+    # NaN・無限大も受け付けない（受け付けると、応答で null になって 200 で返る。#58）。
+    model_config = ConfigDict(strict=True, allow_inf_nan=False)
 
 
 class _RawHourly(_Strict):
@@ -41,7 +39,7 @@ class _RawHourly(_Strict):
     cloud_cover_mid: list[int]
     cloud_cover_high: list[int]
     wind_speed_10m: list[float]
-    wind_direction_10m: list[FiniteFloat]
+    wind_direction_10m: list[float]
 
 
 class _RawDaily(_Strict):

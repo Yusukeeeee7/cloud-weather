@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -300,6 +301,52 @@ def test_service_daily_missing_field_raises_upstream_error(forecast: Forecast, f
 def test_service_daily_null_raises_upstream_error(forecast: Forecast, field: str, row: int) -> None:
     raw = forecast("tokyo")
     raw["daily"][field][row] = None
+
+    with pytest.raises(UpstreamError):
+        build_weather_response(City.TOKYO, raw, FIXED_NOW)
+
+
+NOT_FINITE = [math.nan, math.inf, -math.inf]
+# 小数の項目（整数の項目は、strict の検証で NaN・無限大をもともと受け付けない）。
+HOURLY_FLOAT_FIELDS = ["temperature_2m", "precipitation", "wind_speed_10m", "wind_direction_10m"]
+DAILY_FLOAT_FIELDS = ["temperature_2m_max", "temperature_2m_min", "precipitation_sum"]
+
+
+@pytest.mark.parametrize("field", HOURLY_FLOAT_FIELDS)
+@pytest.mark.parametrize("value", NOT_FINITE)
+@pytest.mark.parametrize("position", [0, 23])
+def test_service_hourly_not_finite_raises_upstream_error(
+    forecast: Forecast, field: str, value: float, position: int
+) -> None:
+    # 受け付けると、応答で null になって 200 で返る（#58 のレビュー）。
+    raw = forecast("tokyo")
+    raw["hourly"][field][_first_index(raw, FIXED_NOW) + position] = value
+
+    with pytest.raises(UpstreamError):
+        build_weather_response(City.TOKYO, raw, FIXED_NOW)
+
+
+@pytest.mark.parametrize("field", HOURLY_FLOAT_FIELDS)
+def test_service_hourly_not_finite_outside_returned_rows_is_ignored(
+    forecast: Forecast, field: str
+) -> None:
+    # 返さない範囲の値は、null と同じく見ない（Red にならない）。
+    raw = forecast("tokyo")
+    raw["hourly"][field][_first_index(raw, FIXED_NOW) + 24] = math.nan
+
+    response = build_weather_response(City.TOKYO, raw, FIXED_NOW)
+
+    assert len(response.hourly) == 24
+
+
+@pytest.mark.parametrize("field", DAILY_FLOAT_FIELDS)
+@pytest.mark.parametrize("value", NOT_FINITE)
+@pytest.mark.parametrize("row", [0, 6])
+def test_service_daily_not_finite_raises_upstream_error(
+    forecast: Forecast, field: str, value: float, row: int
+) -> None:
+    raw = forecast("tokyo")
+    raw["daily"][field][row] = value
 
     with pytest.raises(UpstreamError):
         build_weather_response(City.TOKYO, raw, FIXED_NOW)

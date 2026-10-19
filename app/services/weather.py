@@ -13,7 +13,6 @@ from app.errors import UpstreamError
 from app.schemas import CloudCover, CurrentWeather, WeatherResponse
 from app.services.forecast import (
     INVALID_RESPONSE_ERRORS,
-    FiniteFloat,
     build_daily,
     build_hourly,
     from_unix,
@@ -29,7 +28,8 @@ class _RawCurrent(BaseModel):
     """Open-Meteo の current のうち、使う項目。欠けている・null・型違いは検証で落とす。"""
 
     # 数値の文字列や真偽値を数値として受け付けない。
-    model_config = ConfigDict(strict=True)
+    # NaN・無限大も受け付けない（受け付けると、応答で null になって 200 で返る。#58）。
+    model_config = ConfigDict(strict=True, allow_inf_nan=False)
 
     # UNIX 秒（timeformat=unixtime）。
     time: int
@@ -44,7 +44,7 @@ class _RawCurrent(BaseModel):
     cloud_cover_mid: int
     cloud_cover_high: int
     wind_speed_10m: float
-    wind_direction_10m: FiniteFloat
+    wind_direction_10m: float
 
 
 class _CacheEntry(BaseModel):
