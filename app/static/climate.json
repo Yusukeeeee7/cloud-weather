@@ -198,7 +198,18 @@
         "50-75": 0.077,
         "75-100": 0.51
       },
-      "wet_days_1mm_per_year": 136.0
+      "wet_days_1mm_per_year": 136.0,
+      "wind_direction_share": {
+        "N": 0.259,
+        "NE": 0.14,
+        "E": 0.113,
+        "SE": 0.06,
+        "S": 0.234,
+        "SW": 0.052,
+        "W": 0.036,
+        "NW": 0.079,
+        "calm_variable": 0.027
+      }
     },
     "berlin": {
       "monthly": [
@@ -391,7 +402,18 @@
         "50-75": 0.088,
         "75-100": 0.56
       },
-      "wet_days_1mm_per_year": 120.1
+      "wet_days_1mm_per_year": 120.1,
+      "wind_direction_share": {
+        "N": 0.06,
+        "NE": 0.079,
+        "E": 0.141,
+        "SE": 0.084,
+        "S": 0.12,
+        "SW": 0.165,
+        "W": 0.227,
+        "NW": 0.076,
+        "calm_variable": 0.048
+      }
     }
   }
 }

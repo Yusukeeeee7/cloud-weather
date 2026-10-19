@@ -1,5 +1,6 @@
 """#25 気候の比較ページ：`ml/climate.py` の集計。表は手で書いた小さなもの。"""
 
+import csv
 import json
 import math
 from datetime import UTC, date, datetime, timedelta
@@ -8,6 +9,7 @@ import pandas as pd
 import pytest
 
 from ml import climate
+from tests.conftest import FIXTURES_DIR
 from tests.solar_refs import usno_twilight
 
 
@@ -475,6 +477,82 @@ def test_star_nights_without_darkness_are_not_star() -> None:
     assert _as_dict(result, "month", "days") == {6: 0.0}
 
 
+# 追加 2 の⑧：風配図。METAR の電文の風の群（WMO-No. 782 の 2 節。spec 7「METAR の風」）。
+def _iem_sample_rows() -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for path in sorted((FIXTURES_DIR / "data_raw" / "iem").glob("*.csv")):
+        with path.open(encoding="utf-8", newline="") as file:
+            rows.extend(csv.DictReader(file))
+    return rows
+
+
+def test_parse_wind_matches_iem_direction() -> None:
+    # 期待値は IEM の `drct`（同じ行の電文から IEM が読んだ値。真北からの度）。
+    # VRB の行は `drct` が空。
+    rows = _iem_sample_rows()
+    directions = [row for row in rows if row["drct"]]
+    variables = [row for row in rows if " VRB" in row["metar"]]
+    assert directions and variables
+
+    for row in directions:
+        assert climate.parse_wind(row["metar"]) == ("direction", round(float(row["drct"])))
+    for row in variables:
+        assert row["drct"] == ""
+        assert climate.parse_wind(row["metar"]) == ("variable", None)
+
+
+@pytest.mark.parametrize(
+    ("metar", "expected"),
+    [
+        ("RJTT 191200Z 21013KT 180V240 CAVOK 24/18 Q1019", ("direction", 210)),
+        ("EDDB 191250Z AUTO 07010KT 040V110 CAVOK", ("direction", 70)),
+        ("XXXX 211025Z 31015G27KT 280V350 9999", ("direction", 310)),
+        ("XXXX 211025Z 27006MPS 9999", ("direction", 270)),
+        ("XXXX 211025Z 36010KT 9999", ("direction", 360)),
+        # 静穏・向きの定まらない風・欠けた値（WMO-No. 782 の例）。
+        ("XXXX 211025Z 00000KT 9999", ("calm", None)),
+        ("XXXX 211025Z VRB02KT 9999", ("variable", None)),
+        ("XXXX 211025Z VRB28KT 9999", ("variable", None)),
+        ("XXXX 211025Z ///05KT 9999", ("missing", None)),
+        ("XXXX 211025Z 270//KT 9999", ("missing", None)),
+        ("XXXX 211025Z /////KT 9999", ("missing", None)),
+        # 最初の風の群だけを使う（TEMPO・BECMG のあとの風は予報）。
+        ("XXXX 211025Z 09005KT CAVOK TEMPO 27015KT", ("direction", 90)),
+        ("XXXX 211025Z CAVOK", ("missing", None)),
+        ("", ("missing", None)),
+        (None, ("missing", None)),
+    ],
+)
+def test_parse_wind(metar: str | None, expected: tuple[str, int | None]) -> None:
+    assert climate.parse_wind(metar) == expected
+
+
+def test_wind_direction_share_sectors() -> None:
+    # 8 方位は 45° ずつで、北は 337.5° 以上・22.5° 未満。
+    # 静穏と VRB は 1 つにまとめ、欠けた値は除く。
+    metars = [
+        "X 000000Z 02005KT",
+        "X 000000Z 03005KT",
+        "X 000000Z 36005KT",
+        "X 000000Z 18005KT",
+        "X 000000Z 34005KT",
+        "X 000000Z 00000KT",
+        "X 000000Z VRB02KT",
+        "X 000000Z ///05KT",
+    ]
+    table = _hours("tokyo", "2025-01-10T00:00", len(metars), metar=metars)
+
+    result = climate.wind_direction_share(table)
+
+    shares = _as_dict(result, "sector", "share")
+    assert set(shares) == set(climate.WIND_SECTORS)
+    assert shares["N"] == pytest.approx(3 / 7)
+    assert shares["NE"] == pytest.approx(1 / 7)
+    assert shares["S"] == pytest.approx(1 / 7)
+    assert shares["calm_variable"] == pytest.approx(2 / 7)
+    assert shares["E"] == shares["SE"] == shares["SW"] == shares["W"] == shares["NW"] == 0.0
+
+
 def test_precipitation_observed_days_average_per_year() -> None:
     def day(local_day: str, codes: list[str | None]) -> pd.DataFrame:
         table = _tokyo_day(local_day)
@@ -548,7 +626,15 @@ def test_climate_summary_keys() -> None:
     assert summary["period"] == {"start": "2025-01-01", "end": "2025-12-31", "dates": "local"}
     assert set(summary["cities"]) == {"tokyo", "berlin"}
     for city in summary["cities"].values():
-        assert set(city) == {"monthly", "yearly", "cloud_cover_share", "wet_days_1mm_per_year"}
+        assert set(city) == {
+            "monthly",
+            "yearly",
+            "cloud_cover_share",
+            "wet_days_1mm_per_year",
+            "wind_direction_share",
+        }
+        # 電文に風の群がない表なので、風配図の値はない（null）。
+        assert city["wind_direction_share"] == dict.fromkeys(climate.WIND_SECTORS)
         assert city["wet_days_1mm_per_year"] == 0.0
         assert [row["month"] for row in city["monthly"]] == list(range(1, 13))
         assert set(city["monthly"][0]) == {
@@ -633,3 +719,18 @@ def test_climate_summary_has_wet_days_per_year() -> None:
 
     assert summary["cities"]["tokyo"]["wet_days_1mm_per_year"] == 1.0
     assert summary["cities"]["berlin"]["wet_days_1mm_per_year"] == 0.0
+
+
+def test_climate_summary_has_wind_direction_share() -> None:
+    # 東京の 48 行のうち 1 行だけ北東の風、残りは静穏。割合は小数 3 桁。
+    table = _summary_table()
+    tokyo = table.index[table["city"] == "tokyo"]
+    table.loc[tokyo, "metar"] = "RJTT 000000Z 00000KT CAVOK"
+    table.loc[tokyo[0], "metar"] = "RJTT 000000Z 05005KT CAVOK"
+
+    summary = climate.climate_summary(table, years=[2025], mode="sample")
+
+    share = summary["cities"]["tokyo"]["wind_direction_share"]
+    assert share["NE"] == round(1 / 48, 3)
+    assert share["calm_variable"] == round(47 / 48, 3)
+    assert share["N"] == 0.0

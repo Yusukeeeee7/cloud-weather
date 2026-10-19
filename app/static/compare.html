@@ -37,6 +37,12 @@
       <p class="note">Open-Meteo の過去データの風速（wind_speed_10m）の、1 時間ごとの値の平均です。</p>
     </section>
 
+    <section class="card wide" aria-labelledby="rose-title">
+      <h2 id="rose-title">風向の分布（風配図）<span class="badge">実測</span></h2>
+      <div id="wind-roses" class="pies"></div>
+      <p class="note">空港の観測（METAR）の正時の電文から読んだ、風が吹いてくる方向の割合です。くさびが長いほど、その方向から吹く時間が多いことを表します（2 都市で同じ目盛り）。静穏（1 kt 未満）と、向きの定まらない風（VRB）は図に入れず、下に割合を書いています。</p>
+    </section>
+
     <section class="card wide" aria-labelledby="yearly-title">
       <h2 id="yearly-title">年ごとの降水量（mm）<span class="badge">再解析</span></h2>
       <svg id="yearly-chart" class="chart" viewBox="0 0 640 260" role="img" aria-label="年ごとの降水量"></svg>

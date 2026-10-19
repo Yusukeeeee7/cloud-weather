@@ -612,6 +612,24 @@ input[type="range"]::-moz-range-thumb {
   fill: var(--berlin);
 }
 
+.rose-ring {
+  fill: none;
+  stroke: var(--border);
+}
+
+.rose {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.rose.tokyo {
+  fill: var(--tokyo);
+}
+
+.rose.berlin {
+  fill: var(--berlin);
+}
+
 .pies {
   display: flex;
   flex-wrap: wrap;

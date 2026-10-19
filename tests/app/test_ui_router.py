@@ -191,6 +191,14 @@ def test_compare_has_star_chart(client: TestClient) -> None:
     assert '"star_nights"' in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
 
 
+def test_compare_has_wind_rose(client: TestClient) -> None:
+    # 追加 2 の⑧：METAR の風の群から作る風配図（都市ごと）。
+    text = client.get("/compare").text
+
+    assert 'id="wind-roses"' in text
+    assert "wind_direction_share" in (STATIC_DIR / "compare.js").read_text(encoding="utf-8")
+
+
 def test_compare_has_wet_total(client: TestClient) -> None:
     # 雨の日数のグラフの下に、1 年あたりの合計を出す欄。
     assert 'id="wet-total"' in client.get("/compare").text
@@ -245,6 +253,12 @@ def test_climate_json_matches_schema(city: str) -> None:
     assert _is_number(total)
     assert 0 <= total <= 366
     assert abs(total - sum(row["wet_days_1mm"] for row in monthly)) <= 0.6
+    # 追加 2 の⑧：風配図。8 方位と、静穏・向きの定まらない風。
+    # 割合の合計は 1（丸めのぶんだけずれうる）。
+    wind = data["wind_direction_share"]
+    assert set(wind) == {"N", "NE", "E", "SE", "S", "SW", "W", "NW", "calm_variable"}
+    assert all(_is_number(value) and 0 <= value <= 1 for value in wind.values())
+    assert sum(wind.values()) == pytest.approx(1, abs=0.005)
 
     yearly = data["yearly"]
     assert [row["year"] for row in yearly] == CLIMATE_YEARS

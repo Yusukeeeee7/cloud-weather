@@ -348,3 +348,19 @@ spec.md にはまだない機能。Issue #52 と、2026-10-19 の人間の回答
 - テストの期待値（暗い正時）は、fixtures の USNO の天文薄明の表（2026 年）から読んだ。境目から 2 分以内の正時は使わない（USNO は分単位で、±2 分ずれうる）。
 - 全期間で作り直した `climate.json` の差分は、`star_nights` の 24 行と、その前の行の末尾の `,` だけ（値は変わっていない）。東京 5.6〜16.9 夜／月（年 117.7 夜）、ベルリン 0.0〜12.1 夜／月（6 月が 0.0、年 82.0 夜）。
 - わざと壊す確認（6 か所）：暗い時間がない夜も数える・雲量の境目（`<`→`<=`）・昼の晴れも数える・夜を暦の日付で区切る・−12° にするは検出した。**「半分以上」を「半分より多い」にする壊し方は、最初は検出しなかった**。1 月の東京の夜は暗い正時が 11 個（奇数）で、「ちょうど半分」が作れなかったため。暗い正時が 8 個の 2026-04-15 の夜に替えて、検出するようにした。
+
+### ⑧風向きの確認（2026-10-19、人間の回答「おすすめで⑧に進んで」）
+- **AI の誤り**：「追加 2」の「手元のデータ」に「IEM の生データ（`data/raw/iem/*.csv`）には、すでに `relh`・`drct`・`sknt` の列がある（fixture の見出しで確かめた）。取り直しは要らない」と書いた。これは誤り。見出しを見たのはテスト用のサンプル（`tests/fixtures/data_raw/iem/`、全部の列で取ったもの）だけで、実際に取得したデータは `app/clients/iem.py` の `COLUMNS` の列だけで、`drct`・`sknt`・`relh` はない（`head -1` で確かめた）。
+- WMO-No. 782（2025 年版）の 2 節「SURFACE WIND」を原文（前に取得した PDF の `pdftotext`）で読んだ：`dddff(Gfmfm)KT`／`MPS`。風向は 10° 刻みの真方位（TAF の節に「wind direction from true north」）。`VRB` は風速 3 kt 未満、または 3 kt 以上で 180° 以上変わり 1 つに決められないとき。風速 1 kt 未満は `00000KT`（静穏）。欠けたときは `///05KT`・`270//KT`・`/////KT`。
+- IEM（`mesonet.agron.iastate.edu/request/download.phtml`）を原文（`curl` で取得した HTML）で読んだ：`drct`「Wind Direction in degrees from *true* north」、`sknt`「Wind Speed in knots」。`VRB`・静穏のときの値は書かれていない。
+- Open-Meteo（`open-meteo.com/en/docs`）を原文（`curl` で取得した HTML）で読んだ：`wind_direction_10m` は Instant、単位 `°`、「Wind direction at 10, 80, 120 or 180 meters above ground」。**吹いてくる方向か、吹いていく方向かは書かれていない**。
+- 実データで突き合わせた（2026-10-19T20:00Z ごろ取得。Open-Meteo の hourly と IEM の METAR）：ベルリンは Open-Meteo 53〜69°、METAR 050〜070° でそろった（吹いていく方向なら 180° ずれる）。東京は風の弱い時間（1〜4 kt）にずれが大きかった（18〜19Z：Open-Meteo 217〜249°、METAR 020°）。
+- 風向が「吹いてくる方向」であることは WMO-No. 782 に書かれていなかった（「from true north」は真北から測るという意味にも読める）。画面に書く前に気づき、米国気象局（NWS）の用語集を原文（`curl`）で読んだ：「The true direction from which the wind is blowing」「North is 360 degrees. A wind direction of 0 degrees is only used when wind is calm」。spec の「METAR の風」の行に足した。
+- 人間の回答「おすすめで」：今日の天気の風向きは別の Issue にする（`/weather` が風向を要るようにすると 151 個のテストが失敗し、日差し・過去 24 時間・雲底の fixture も取り直しになるため）。このブランチは比較ページの風配図まで。
+
+### 実装時の変更（⑧比較ページの風配図）
+- METAR の正時の電文の最初の風の群を `parse_wind` で読み、8 方位（北は 337.5° 以上・22.5° 未満）と「静穏・不定」（`00000KT`・`VRB`）の割合にした（`wind_direction_share`）。風の値が欠けた行（`///05KT`・`270//KT`・群なし）は除く。取得し直しはしていない。
+- テストの期待値は、テスト用サンプル（`tests/fixtures/data_raw/iem/`）の IEM の `drct`（197 行。電文から読んだ風向とすべて一致）と、WMO-No. 782 の例。
+- 比較ページのテスト `test_compare_has_wind_rose` は、最初、`compare.js` に `"wind_direction_share"`（引用符つき）があることを確かめる形で書いた。実装では `data.cities[...].wind_direction_share` とプロパティで読むので、引用符を外した（ほかのグラフは `monthly(data, city, "…")` と文字列で渡しているので、それに合わせて書いてしまった）。
+- 全期間で作り直した `climate.json` の差分は、`wind_direction_share` の 22 行と、その前の行の末尾の `,` だけ。東京は北 25.9 %・南 23.4 %、ベルリンは西 22.7 %・南西 16.5 %。静穏・不定は東京 2.7 %、ベルリン 4.8 %。
+- わざと壊す確認（6 か所）：方位の境目・静穏を読まない・風速の欠けを受け付ける・最後の群を使う・静穏・不定を除くは検出した。欠けた行を除く絞り込み（`known`）を外す壊し方は検出しなかったが、`pd.crosstab` が欠けた値（None）を数えないので、結果は同じ（同じ動作になる壊し方）。

@@ -8,6 +8,7 @@
 
 import math
 import numbers
+import re
 from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -30,6 +31,13 @@ PRECIPITATION_CODES = frozenset({"DZ", "RA", "SN", "SG", "PL", "GR", "GS", "UP"}
 _RAISED = frozenset({"DR", "BL"})
 _VICINITY = "VC"
 _AUTO = r"\bAUTO\b"
+# METAR の風の群（WMO-No. 782 の 2 節。spec 7「METAR の風」）：風向 3 桁（または VRB・///）、
+# 風速 2〜3 桁（または //）、突風、単位。
+_WIND_GROUP = re.compile(r"^(?P<direction>VRB|\d{3}|///)(?:\d{2,3}|//)(?:G\d{2,3})?(?:KT|MPS)$")
+_CALM = re.compile(r"^00000(?:KT|MPS)$")
+# 風配図の 8 方位（北から時計回りに 45° ずつ）と、静穏・向きの定まらない風。
+WIND_SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW", "calm_variable")
+WindKind = Literal["direction", "calm", "variable", "missing"]
 _TEMPERATURE_COLUMNS = {"metar": "metar_temperature_c", "reanalysis": "temperature_c"}
 _MONTHS = range(1, 13)
 # 星空日和の夜：天文薄明（spec 5 の `/daylight`）の高度より下を暗い時間とし、
@@ -255,6 +263,53 @@ def monthly_star_nights(observations: pd.DataFrame) -> pd.DataFrame:
     return _average_days_per_year(counts, star)
 
 
+def parse_wind(metar: object) -> tuple[WindKind, int | None]:
+    """電文の最初の風の群から、風向の種類と風向（度、真方位）を読む。
+
+    TEMPO・BECMG のあとの群は予報なので使わない（最初の群だけを見る）。
+    """
+    if not isinstance(metar, str):
+        return "missing", None
+    group = next((token for token in metar.split() if _WIND_GROUP.match(token)), None)
+    if group is None:
+        return "missing", None
+    if _CALM.match(group):
+        return "calm", None
+    direction = group[:3]
+    if direction == "VRB":
+        return "variable", None
+    if not direction.isdigit() or "/" in group:
+        return "missing", None
+    return "direction", int(direction)
+
+
+def _wind_sector(kind: WindKind, direction: int | None) -> str | None:
+    if kind in ("calm", "variable"):
+        return "calm_variable"
+    if direction is None:
+        return None
+    return WIND_SECTORS[int((direction + 22.5) // 45) % 8]
+
+
+def wind_direction_share(observations: pd.DataFrame) -> pd.DataFrame:
+    """風配図：METAR の風向の 8 方位と「静穏・不定」の割合。風の値が欠けた行は除く。"""
+    sectors = pd.Series(
+        [_wind_sector(*parse_wind(metar)) for metar in observations["metar"]],
+        index=observations.index,
+        dtype="object",
+    )
+    known = sectors.notna()
+    counts = (
+        pd.crosstab(observations.loc[known, "city"], sectors[known])
+        .reindex(columns=list(WIND_SECTORS), fill_value=0)
+        .astype("float64")
+    )
+    shares = counts.div(counts.sum(axis=1), axis=0)
+    shares.index.name = "city"
+    shares.columns.name = None
+    return shares.reset_index().melt(id_vars="city", var_name="sector", value_name="share")
+
+
 def _rounded(value: object, digits: int) -> float | None:
     # numpy の数も numbers.Real に入る。NaN は None にする（JSON に NaN を書かない）。
     if not isinstance(value, numbers.Real) or math.isnan(value):
@@ -310,11 +365,13 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
     shares = _lookup(cloud_cover_share(observations), city, "band", "share")
     cloud = {band: _rounded(shares.get(band), 3) for band in CLOUD_COVER_BANDS}
     wet_total = _lookup(yearly_wet_days(observations), city, "city", "days")
+    winds = _lookup(wind_direction_share(observations), city, "sector", "share")
     return {
         "monthly": monthly,
         "yearly": yearly,
         "cloud_cover_share": cloud,
         "wet_days_1mm_per_year": _rounded(wet_total.get(city), 1),
+        "wind_direction_share": {sector: _rounded(winds.get(sector), 3) for sector in WIND_SECTORS},
     }
 
 
