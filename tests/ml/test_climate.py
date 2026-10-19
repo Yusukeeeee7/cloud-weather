@@ -345,6 +345,30 @@ def test_precipitation_observed_days_average_per_year() -> None:
     assert _as_dict(observed, "month", "days") == {3: 1.5}
 
 
+# 追加：1 年あたりの合計
+def test_yearly_wet_days_sums_monthly_averages() -> None:
+    # 1 月は 2 年ぶん（2 日と 1 日 → 年あたり 1.5 日）、2 月は 1 年ぶん（1 日）。合計は 2.5 日。
+    table = _concat(
+        _wet_day("2024-01-10", 1.0),
+        _wet_day("2024-01-11", 2.0),
+        _wet_day("2025-01-10", 1.5),
+        _wet_day("2025-01-11", 0.0),
+        _wet_day("2025-02-10", 3.0),
+    )
+
+    total = climate.yearly_wet_days(table)
+
+    assert _as_dict(total, "city", "days") == {"tokyo": 2.5}
+
+
+def test_yearly_wet_days_uses_threshold_boundary() -> None:
+    table = _concat(_wet_day("2025-01-10", 0.99), _wet_day("2025-02-10", 1.0))
+
+    total = climate.yearly_wet_days(table)
+
+    assert _as_dict(total, "city", "days") == {"tokyo": 1.0}
+
+
 def _summary_hours(city: str, start: str, count: int) -> pd.DataFrame:
     table = _layer_rows(city, start, [("XXXX 000000Z CAVOK", None, None)] * count)
     table["metar_temperature_c"] = 10.0
@@ -370,7 +394,8 @@ def test_climate_summary_keys() -> None:
     assert summary["period"] == {"start": "2025-01-01", "end": "2025-12-31", "dates": "local"}
     assert set(summary["cities"]) == {"tokyo", "berlin"}
     for city in summary["cities"].values():
-        assert set(city) == {"monthly", "yearly", "cloud_cover_share"}
+        assert set(city) == {"monthly", "yearly", "cloud_cover_share", "wet_days_1mm_per_year"}
+        assert city["wet_days_1mm_per_year"] == 0.0
         assert [row["month"] for row in city["monthly"]] == list(range(1, 13))
         assert set(city["monthly"][0]) == {
             "month",
@@ -435,3 +460,14 @@ def test_climate_summary_rounds_values() -> None:
     assert summary["cities"]["tokyo"]["monthly"][0]["temperature_c_metar"] == 10.0
     share = summary["cities"]["tokyo"]["cloud_cover_share"]
     assert share["0-25"] == round(1 / 48, 3)
+
+
+def test_climate_summary_has_wet_days_per_year() -> None:
+    # 東京の 2025-01-10 だけ 1 mm 以上（1.04 mm）。1 月が 1 日で、合計は 1.0 日。
+    table = _summary_table()
+    table.loc[table.index[0], "precipitation_mm"] = 1.04
+
+    summary = climate.climate_summary(table, years=[2025], mode="sample")
+
+    assert summary["cities"]["tokyo"]["wet_days_1mm_per_year"] == 1.0
+    assert summary["cities"]["berlin"]["wet_days_1mm_per_year"] == 0.0

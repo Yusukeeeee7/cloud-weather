@@ -112,6 +112,15 @@ def monthly_wet_days(observations: pd.DataFrame, threshold_mm: float = WET_DAY_M
     return _average_days_per_year(daily, daily["precipitation_mm"] >= threshold_mm)
 
 
+def yearly_wet_days(observations: pd.DataFrame, threshold_mm: float = WET_DAY_MM) -> pd.DataFrame:
+    """1 年あたりの「`threshold_mm` 以上の日」の数。
+
+    月ごとの年あたりの日数（丸める前）を 12 か月ぶん足したもの。
+    """
+    monthly = monthly_wet_days(observations, threshold_mm)
+    return monthly.groupby("city")["days"].sum().rename("days").reset_index()
+
+
 def yearly_precipitation_mm(observations: pd.DataFrame) -> pd.DataFrame:
     """年ごとの降水量の合計と、合計に使ったそろった日の数（再解析）。"""
     daily = daily_precipitation_mm(observations)
@@ -249,7 +258,13 @@ def _city_summary(observations: pd.DataFrame, city: str, years: list[int]) -> di
 
     shares = _lookup(cloud_cover_share(observations), city, "band", "share")
     cloud = {band: _rounded(shares.get(band), 3) for band in CLOUD_COVER_BANDS}
-    return {"monthly": monthly, "yearly": yearly, "cloud_cover_share": cloud}
+    wet_total = _lookup(yearly_wet_days(observations), city, "city", "days")
+    return {
+        "monthly": monthly,
+        "yearly": yearly,
+        "cloud_cover_share": cloud,
+        "wet_days_1mm_per_year": _rounded(wet_total.get(city), 1),
+    }
 
 
 def climate_summary(observations: pd.DataFrame, years: Iterable[int], mode: str) -> dict[str, Any]:

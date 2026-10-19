@@ -103,6 +103,33 @@ def test_static_script_does_not_use_inner_html(name: str) -> None:
     assert "document.write" not in script
 
 
+# #25 の追加 3：読み込み中の表示。
+# 画面の動きは人間がブラウザで確かめる。ここでは部品があることだけを見る。
+def test_app_script_shows_loading_state() -> None:
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "読み込み中…" in script
+    assert '"aria-busy"' in script
+    assert '"status"' in script
+
+
+def test_app_script_has_retry_button() -> None:
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+    assert "もう一度読み込む" in script
+
+
+def test_spinner_stops_when_reduced_motion() -> None:
+    # 動きを減らす設定では、くるくるを回さない（文字だけにする）。
+    style = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+    reduced = style.split("@media (prefers-reduced-motion: reduce)", 1)
+
+    assert ".spinner" in reduced[0]
+    assert len(reduced) == 2
+    assert ".spinner" in reduced[1]
+    assert "animation: none" in reduced[1]
+
+
 # #25 気候の比較ページ（`GET /compare`）。
 CLIMATE_JSON = STATIC_DIR / "climate.json"
 CLIMATE_CITIES = {"tokyo", "berlin"}
@@ -130,6 +157,11 @@ def test_compare_not_in_openapi(client: TestClient) -> None:
 
     assert "/compare" not in paths
     assert "/" not in paths
+
+
+def test_compare_has_wet_total(client: TestClient) -> None:
+    # 雨の日数のグラフの下に、1 年あたりの合計を出す欄。
+    assert 'id="wet-total"' in client.get("/compare").text
 
 
 def test_compare_script_reads_only_climate_json() -> None:
@@ -171,6 +203,12 @@ def test_climate_json_matches_schema(city: str) -> None:
         assert 0 <= row["wet_days_1mm"] <= 31
         assert 0 <= row["precipitation_observed_days"] <= 31
         assert 0 <= row["low_ceiling_share"] <= 1
+    # 追加：1 mm 以上の雨の日数の、1 年あたりの合計。
+    # 月の値（小数 1 桁に丸めたもの）の合計とは、丸めのぶんだけずれうる。
+    total = data["wet_days_1mm_per_year"]
+    assert _is_number(total)
+    assert 0 <= total <= 366
+    assert abs(total - sum(row["wet_days_1mm"] for row in monthly)) <= 0.6
 
     yearly = data["yearly"]
     assert [row["year"] for row in yearly] == CLIMATE_YEARS

@@ -276,6 +276,13 @@ function render(data) {
     true,
   );
 
+  // 雨の日数の、1 年あたりの合計（月ごとの棒を 12 か月ぶん足したもの）。
+  const totals = CITIES.map((city) => {
+    const total = data.cities[city.key].wet_days_1mm_per_year;
+    return `${city.label} ${isNumber(total) ? `${formatNumber(total, 1)} 日` : "—"}`;
+  });
+  document.getElementById("wet-total").textContent = `1 年あたりの合計：${totals.join("、")}`;
+
   // 年の数え方（現地の日付）で欠けた日がある年を書く。
   const short = CITIES.flatMap((city) =>
     data.cities[city.key].yearly

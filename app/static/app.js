@@ -34,6 +34,11 @@ let history = [];
 let timezone = "UTC";
 // 都市を続けて切り替えたとき、古い応答で上書きしない。
 let loadId = 0;
+// 読み込み中の都市。同じ都市を読み込み中に押し直しても、取得を重ねない。
+let currentCity = null;
+let loading = false;
+// 都市を切り替えたときに「読み込み中」にする欄（それぞれの section に aria-busy を付ける）。
+const LOADING_IDS = ["current", "cloud-base", "daylight", "history-status", "hourly", "daily"];
 
 function el(tag, text, className) {
   const node = document.createElement(tag);
@@ -100,9 +105,38 @@ function tile(label, value, sub) {
   return box;
 }
 
+function setBusy(container, value) {
+  container.closest("section").setAttribute("aria-busy", String(value));
+}
+
+function showLoading(container) {
+  clear(container);
+  const box = el("p", null, "loading");
+  box.setAttribute("role", "status");
+  const spinner = el("span", null, "spinner");
+  spinner.setAttribute("aria-hidden", "true");
+  box.append(spinner, el("span", "読み込み中…"));
+  container.append(box);
+  setBusy(container, true);
+}
+
+// 読み込み中は押せない（取得が重ならないように）。読み込みが終わったら押せるようにする。
+function retryButton() {
+  const button = el("button", "もう一度読み込む", "retry");
+  button.type = "button";
+  button.disabled = loading;
+  button.addEventListener("click", () => load(currentCity));
+  return button;
+}
+
 function showError(container, message) {
   clear(container);
-  container.append(el("p", message, "error"));
+  container.append(el("p", message, "error"), retryButton());
+  setBusy(container, false);
+}
+
+function done(id) {
+  setBusy(document.getElementById(id), false);
 }
 
 function showNotice(text) {
@@ -551,7 +585,7 @@ function renderHistory(data) {
   slider.max = String(history.length - 1);
   slider.value = slider.max;
   document.getElementById("history").hidden = false;
-  document.getElementById("history-error").hidden = true;
+  clear(document.getElementById("history-status"));
   renderTicks();
   showHour(history.length - 1);
 }
@@ -559,70 +593,121 @@ function renderHistory(data) {
 function failHistory() {
   history = [];
   document.getElementById("history").hidden = true;
-  const error = document.getElementById("history-error");
-  error.textContent = "取得できませんでした";
-  error.hidden = false;
+  showError(document.getElementById("history-status"), "取得できませんでした");
 }
 
 // --- 読み込み ---
 
+// 前の都市の値を消して、各欄を「読み込み中」にする。
+function startLoading() {
+  for (const id of LOADING_IDS) showLoading(document.getElementById(id));
+  hideGauge();
+  history = [];
+  document.getElementById("history").hidden = true;
+  document.getElementById("hourly-note").textContent = "";
+  document.getElementById("sunshine-note").textContent = "";
+  showNotice("");
+}
+
+// Promise.allSettled の 1 つぶんと同じ形にする（届いた欄から表示するため）。
+function settle(promise) {
+  return promise.then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason }),
+  );
+}
+
 async function load(city) {
+  if (loading && city === currentCity) return;
   const id = (loadId += 1);
+  currentCity = city;
+  loading = true;
   for (const button of document.querySelectorAll("[data-city]")) {
     button.setAttribute("aria-pressed", String(button.dataset.city === city));
   }
+  startLoading();
   // /weather を先に待つ。残りは同じ保存値（weather:{city}）を使うので、
   // 同時に呼ぶと、キャッシュが空のときに外部APIをそれぞれが呼んでしまう。
   // /daylight は外部APIを使わないので、/weather と同時に呼ぶ。
+  // 時刻の表示に /weather の timezone が要るので、表示は /weather と一緒。
   const [weather, daylight] = await Promise.allSettled([
     getJson("/weather", city),
     getJson("/daylight", city),
   ]);
-  if (id !== loadId) return;
-  const [cloudBase, cloudHistory, cloudBaseForecast, ceilingHistory, sunshine] =
-    await Promise.allSettled([
-      getJson("/cloud-base", city),
-      getJson("/cloud-history", city),
-      getJson("/cloud-base/forecast", city),
-      getJson("/cloud-base/history", city),
-      getJson("/sunshine", city),
-    ]);
   if (id !== loadId) return;
 
   // /weather が取れなければ、時刻は UTC で出す。
   timezone = weather.status === "fulfilled" ? weather.value.timezone : "UTC";
   if (weather.status === "fulfilled") {
     const value = weather.value;
-    renderCurrent(value, sunshine);
-    renderHourly(value, cloudBaseForecast, sunshine);
     renderDaily(value);
+    done("daily");
     showNotice(value.stale ? `古いデータです（取得：${formatTime(value.fetched_at, true)}）` : "");
   } else {
     for (const name of ["current", "hourly", "daily"]) {
       showError(document.getElementById(name), "取得できませんでした");
     }
-    document.getElementById("hourly-note").textContent = "";
-    document.getElementById("sunshine-note").textContent = "";
     showNotice("天気を取得できなかったため、時刻は UTC で表示しています");
   }
 
-  if (daylight.status === "fulfilled") renderDaylight(daylight.value);
-  else showError(document.getElementById("daylight"), "取得できませんでした");
-
-  if (cloudBase.status === "fulfilled") {
-    renderCloudBase(cloudBase.value);
-    drawGauge(cloudBase.value);
+  if (daylight.status === "fulfilled") {
+    renderDaylight(daylight.value);
+    done("daylight");
   } else {
-    hideGauge();
-    const message =
-      cloudBase.reason.code === "model_unavailable" ? "モデルを読み込めていません" : "取得できませんでした";
-    showError(document.getElementById("cloud-base"), message);
+    showError(document.getElementById("daylight"), "取得できませんでした");
   }
 
-  // showHour が雲底の値を使うので、雲量より先に入れる。
-  renderCeilingHistory(ceilingHistory);
-  if (cloudHistory.status === "fulfilled") renderHistory(cloudHistory.value);
-  else failHistory();
+  const cloudBase = settle(getJson("/cloud-base", city));
+  const cloudHistory = settle(getJson("/cloud-history", city));
+  const cloudBaseForecast = settle(getJson("/cloud-base/forecast", city));
+  const ceilingHistory = settle(getJson("/cloud-base/history", city));
+  const sunshine = settle(getJson("/sunshine", city));
+
+  // 届いた欄から表示する。それぞれ、都市が切り替わっていたら何もしない。
+  const steps = [
+    cloudBase.then((result) => {
+      if (id !== loadId) return;
+      if (result.status === "fulfilled") {
+        renderCloudBase(result.value);
+        drawGauge(result.value);
+        done("cloud-base");
+        return;
+      }
+      hideGauge();
+      const message =
+        result.reason.code === "model_unavailable" ? "モデルを読み込めていません" : "取得できませんでした";
+      showError(document.getElementById("cloud-base"), message);
+    }),
+    Promise.all([ceilingHistory, cloudHistory]).then(([ceiling, past]) => {
+      if (id !== loadId) return;
+      // showHour が雲底の値を使うので、雲量より先に入れる。
+      renderCeilingHistory(ceiling);
+      if (past.status === "fulfilled") {
+        renderHistory(past.value);
+        done("history-status");
+      } else {
+        failHistory();
+      }
+    }),
+  ];
+  if (weather.status === "fulfilled") {
+    steps.push(
+      sunshine.then((result) => {
+        if (id !== loadId) return;
+        renderCurrent(weather.value, result);
+        done("current");
+      }),
+      Promise.all([cloudBaseForecast, sunshine]).then(([forecast, result]) => {
+        if (id !== loadId) return;
+        renderHourly(weather.value, forecast, result);
+        done("hourly");
+      }),
+    );
+  }
+  await Promise.all(steps);
+  if (id !== loadId) return;
+  loading = false;
+  for (const button of document.querySelectorAll(".retry")) button.disabled = false;
 }
 
 // 幅が変わったら、折れ線を描き直す。
