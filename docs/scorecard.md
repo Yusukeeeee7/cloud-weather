@@ -77,7 +77,7 @@
 |---|---|---|---|
 | Branch-Protection | 0 | 直した（#53。設定後は 3 点。下の「設定後の点」） | main に Rulesets を設定する（force push・削除の禁止、CI の成功を必須に）。spec #2 の「ブランチ保護の設定が残っている」と同じ作業。Rulesets は既定の `GITHUB_TOKEN` で Scorecard が読める（README）ので、PAT は要らない |
 | SAST | 0 | 直した（#54。設定後は 7 点。下の「設定後の点（SAST）」） | CodeQL。#18 で「リポジトリを公開するときに入れる」と決め、いまは public なので条件を満たしている。ruff の `S` ルール（#18）は Scorecard の数える道具に入っていない（数えるのは CodeQL・SonarCloud など） |
-| Security-Policy | 0 | 直す（別の Issue） | `SECURITY.md` を置き、脆弱性の報告の窓口を書く（GitHub の非公開の脆弱性報告を使う予定。設定は Issue で確かめる） |
+| Security-Policy | 0 | 直した（#55。設定後は 10 点。下の「設定後の点（Security-Policy）」） | `SECURITY.md` を置き、脆弱性の報告の窓口を書く（GitHub の非公開の脆弱性報告を使う予定。設定は Issue で確かめる） |
 | License | 0 | 人間が決める（別の Issue） | 付けるか、どのライセンスにするかは持ち主が決めること |
 | Code-Review | 0 | 直さない | 1 人で開発していて、承認する人がいない。承認を必須にすると、自分でマージできなくなる |
 | Contributors | 0 | 直さない | 個人の学習用のリポジトリ。直す方法は、ほかの組織の参加者を増やすことだけ |
@@ -128,3 +128,21 @@
 - 点の見方（`ossf/scorecard` の v5.6.0 のソース `checks/evaluation/sast.go` を、#54 の計画のとき `gh api` で取得して読んだ）：ワークフローに `github/codeql-action/analyze` があると (a) が 10 点。(b) は最近の 30 のコミットのうち、マージした PR の head に CodeQL などの check run が付いている割合。(a) があり (b) がすべてでないときは、(b) × 3 と (a) × 7 の重み付きの平均になる。計画の見込み（7 以上）の範囲。
 - 「4 commits out of 30」：CodeQL の check run が付いているのは PR #64 だけで、PR #64 のコミット（3 つ）とマージのコミットがそれぞれ PR #64 に結びつくので 4 と数えられたと思われる（Scorecard の出力にどのコミットかは出ないので、確かめていない）。
 - これからマージする PR が CodeQL を通るたびに (b) が上がり、最近の 30 のコミットがすべてそうなれば 10 点になる見込み。直すことはない（時間で上がる）。
+
+## 設定後の点（Security-Policy、#55）
+
+**合計 6.4 / 10、Security-Policy 10 / 10**（2026-10-20T14:25:02Z。PR #67 のマージ後の main への push の実行、run 39438060523 の 2 回目、コミット `24558a7`。Scorecard v5.6.0）
+
+- `api.scorecard.dev` の JSON を保存し、Security-Policy の `score`・`reason`・`details` をそのまま写した（手で写していない）。ほかの項目は、SAST（7 のまま。details は「11 commits out of 30 are checked with a SAST tool」）だけ見た。合計は 5.9 から 6.4 に上がった。
+- 設定の中身は `docs/security-settings.md` の「脆弱性の報告の窓口」と、リポジトリの直下の `SECURITY.md`。
+- 理由：security policy file detected
+
+| 判定 | details（Scorecard の出力） |
+|---|---|
+| Info | security policy file detected: SECURITY.md:1 |
+| Info | Found linked content: SECURITY.md:1 |
+| Info | Found disclosure, vulnerability, and/or timelines in security policy: SECURITY.md:1 |
+| Info | Found text in security policy: SECURITY.md:1 |
+
+- 点の見方（`ossf/scorecard` の v5.6.0 のソースを、#55 の計画のとき `gh api` で取得して読んだ）：ファイルがあり、URL かメールで 6 点、それ以外の文章で 3 点、`Vuln`・`Disclos`・1〜4 桁の数字が合計 2 つ以上で 1 点。計画の見込み（10）のとおり。
+- **1 回目の実行は失敗した**（2026-10-20T14:18:44Z〜14:19:02Z）。Scorecard の手順が「`ListCommits:error during graphqlHandler.setup: internal error: githubv4.Query: Something went wrong while executing your query`」で止まった（GitHub の GraphQL の側のエラー）。前に成功した実行（run 39430900807）のログと比べ、違うのはこの行だけだったので、`gh run rerun --failed` で再実行し、2 回目（ジョブは 14:24:56Z〜14:25:32Z）が成功した。ワークフローは変えていない。1 回目の失敗では `api.scorecard.dev` の結果は前の実行（`bd02c63`）のままだった。

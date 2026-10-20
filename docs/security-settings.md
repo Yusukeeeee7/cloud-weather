@@ -112,4 +112,5 @@ CI が壊れて誰もマージできなくなったとき：
 - 報告が来たとき管理者に通知が届くのは、リポジトリを「All activity」で watch しているか、「Security alerts」を購読しているとき（GitHub の公式の文書の原文を `github/docs` から取得して読んだ）。
 - 報告する人の画面（Report a vulnerability のフォーム）は確かめていない。持ち主が開くと持ち主の画面になるため。有効になっていることは、上の `gh api` と Overview で確かめた。
 - 報告が来たら、Security タブの Advisories で非公開のまま扱う。内容を dev-log・Issue・コミットに書かない。
+- マージ後（PR #67、コミット `24558a7`）に GraphQL の `repository { isSecurityPolicyEnabled securityPolicyUrl }` が `true`・`https://github.com/Yusukeeeee7/cloud-weather/security/policy` になった（設定の前は `false`・`null`）。Scorecard の Security-Policy は 0 から 10 点（`docs/scorecard.md`）。
 - 止めるときは、同じ画面の Disable を押す。`SECURITY.md` の案内と食い違うので、止めるなら `SECURITY.md` も直す。
