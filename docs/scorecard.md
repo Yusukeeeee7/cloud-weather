@@ -76,7 +76,7 @@
 | 項目 | 点 | 対応 | 理由 |
 |---|---|---|---|
 | Branch-Protection | 0 | 直した（#53。設定後は 3 点。下の「設定後の点」） | main に Rulesets を設定する（force push・削除の禁止、CI の成功を必須に）。spec #2 の「ブランチ保護の設定が残っている」と同じ作業。Rulesets は既定の `GITHUB_TOKEN` で Scorecard が読める（README）ので、PAT は要らない |
-| SAST | 0 | 直す（別の Issue） | CodeQL。#18 で「リポジトリを公開するときに入れる」と決め、いまは public なので条件を満たしている。ruff の `S` ルール（#18）は Scorecard の数える道具に入っていない（数えるのは CodeQL・SonarCloud など） |
+| SAST | 0 | 直した（#54。設定後は 7 点。下の「設定後の点（SAST）」） | CodeQL。#18 で「リポジトリを公開するときに入れる」と決め、いまは public なので条件を満たしている。ruff の `S` ルール（#18）は Scorecard の数える道具に入っていない（数えるのは CodeQL・SonarCloud など） |
 | Security-Policy | 0 | 直す（別の Issue） | `SECURITY.md` を置き、脆弱性の報告の窓口を書く（GitHub の非公開の脆弱性報告を使う予定。設定は Issue で確かめる） |
 | License | 0 | 人間が決める（別の Issue） | 付けるか、どのライセンスにするかは持ち主が決めること |
 | Code-Review | 0 | 直さない | 1 人で開発していて、承認する人がいない。承認を必須にすると、自分でマージできなくなる |
@@ -111,3 +111,20 @@
 - 点の見方（公式の `docs/checks.md` の Branch-Protection の節。#53 の計画のとき `gh api` で原文を取得して読んだ）：段 1（force push・削除の禁止）を満たして 3 点。段 2 は「承認 1 人以上」を満たさないので、段 3 の必須チェック（`status check found`）は点に入らない。計画の見込み（3 以上 6 未満）の範囲。
 - 段 2 で「管理者」と付いた条件（PR の必須、最新の取り込み、最後の push の承認）は、既定のトークンでは満たしたものとして数える、と `checks.md` にある。それでも details には `'up-to-date branches' is disabled` などの Warn が出た。Rulesets は既定のトークンで読めるので、読めた値をそのまま出しているのだと思われるが、点の計算でどう扱われたかは確かめていない。
 - これ以上上げるには、承認の必須（段 2）が要る。1 人の開発なので入れない（Code-Review と同じ理由）。
+
+## 設定後の点（SAST、#54）
+
+**合計 5.9 / 10、SAST 7 / 10**（2026-10-20T13:30:07Z。PR #64 のマージ後の main への push の実行、run 39430900807、コミット `74c7716`。Scorecard v5.6.0）
+
+- `api.scorecard.dev` の JSON を保存し、SAST の `score`・`reason`・`details` をそのまま写した（手で写していない）。ほかの項目の点は見ていない（合計が 5.5 から 5.9 に上がったことだけ）。
+- 設定の中身は `docs/security-settings.md` の「CodeQL」。
+- 理由：SAST tool detected but not run on all commits
+
+| 判定 | details（Scorecard の出力） |
+|---|---|
+| Info | SAST configuration detected: CodeQL |
+| Warn | 4 commits out of 30 are checked with a SAST tool |
+
+- 点の見方（`ossf/scorecard` の v5.6.0 のソース `checks/evaluation/sast.go` を、#54 の計画のとき `gh api` で取得して読んだ）：ワークフローに `github/codeql-action/analyze` があると (a) が 10 点。(b) は最近の 30 のコミットのうち、マージした PR の head に CodeQL などの check run が付いている割合。(a) があり (b) がすべてでないときは、(b) × 3 と (a) × 7 の重み付きの平均になる。計画の見込み（7 以上）の範囲。
+- 「4 commits out of 30」：CodeQL の check run が付いているのは PR #64 だけで、PR #64 のコミット（3 つ）とマージのコミットがそれぞれ PR #64 に結びつくので 4 と数えられたと思われる（Scorecard の出力にどのコミットかは出ないので、確かめていない）。
+- これからマージする PR が CodeQL を通るたびに (b) が上がり、最近の 30 のコミットがすべてそうなれば 10 点になる見込み。直すことはない（時間で上がる）。

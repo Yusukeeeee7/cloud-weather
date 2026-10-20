@@ -167,3 +167,5 @@ Python のパッケージはなし。外部 Action を 2 つ足す（`github/cod
 - **シナリオ 2・4**：PR #64 で 2 つのジョブと `CodeQL`（アプリ `github-advanced-security`）が成功。初回の指摘は 0 件で、直すもの・閉じるものはなかった（質問 5 の手順は使わなかった）。`tests/fixtures/` の HTML の指摘も出なかったので、`paths-ignore` は足していない。
 - **シナリオ 3 の書き方**：CodeQL の `py/path-injection` の原文（`github/codeql` の `PathInjection.ql`。`@precision high`、`@problem.severity error`）と、FastAPI の引数を外からの入力として扱う `FastApi.qll` を `gh api` で取得して読んでから決めた。`app/routers/health.py` に `@router.get("/debug-file")` で `Path(path).read_text()` を返す関数を足した（ruff が通る形にした）。結果はアラート #10（22 行目）。
 - **必須チェックでないことの影響**（計画に書いていなかった）：PR #65 は `CodeQL` が `failure` でも `mergeStateStatus: UNSTABLE` でマージできる状態だった。質問 7 の決定どおりで、`docs/security-settings.md` に書いた。
+- **レビュー（`/review`）の後の変更**：spec #18 の状態は、main への push の実行を確かめるまで「実装済み」とし、`feature/issues_54-verify` で「完了」に替えた（#24 と同じ扱い）。
+- **シナリオ 6・7**（`feature/issues_54-verify`）：マージ後の main への push で CodeQL（run 39430900751）が成功し、main の解析が 2 つ（指摘 0 件）。Scorecard（run 39430900807）の SAST は 7 点（理由「SAST tool detected but not run on all commits」、details「4 commits out of 30 are checked with a SAST tool」）。計画の見込み（7 以上）の範囲。
