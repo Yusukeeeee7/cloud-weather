@@ -146,3 +146,11 @@ Issue #53 の本文（引用）：
 6. **直接の push・force push・削除の拒否を、実際に試さなくてよいか。**（おすすめ：試さない。設定が間違っていたら main が書き換わる。`gh api` で効いているルールを読むことで代える）
 7. **Scorecard の点の記録は、マージ後の別の PR（`feature/issues_53-verify`）にしてよいか。**（おすすめ：別の PR。点はマージ後の実行でしか分からず、#52 の `-verify` と同じ形）
 8. **spec #2 の状態は、シナリオ 3 が通ったら「完了」にしてよいか。**（おすすめ：する。受け入れ条件の「PR で ci.yml が実行され」「失敗時に PR がマージできない」の両方がそろう）
+
+## 実装時の変更
+
+- **必須チェックの設定を 2 回やり直した**（2026-10-20）。1 回目は `required_status_checks` が空で、2 回目は検索欄の文字が候補を選ぶ前に登録されて、チェックの名前が `required_status_checks` になった（PR #61 は `ci` が成功しても `BLOCKED`）。3 回目に候補の一覧から `ci` を選び、`context: ci`・`integration_id: 15368`（GitHub Actions）になった。どれも、`gh api` で読んだことで気づいた。
+- **計画になかった項目 `require_extra_approval_for_unattributed_changes: true`** が `pull_request` のルールに入っていた（GitHub の既定値）。公式ドキュメント「Available rules for rulesets」の原文（`github/docs` の `available-rules-for-rulesets.md` を `gh api` で取得して読んだ）によれば、Copilot が開いた PR で承認を 1 つ増やす設定で、承認 0 のときは効かない。変えずに `docs/security-settings.md` に記録した。
+- 確認用の失敗するテストは、新しいファイル `tests/test_branch_protection_fail.py` にした（`feature/issues_53-fail` だけ。main には入らない）。
+- spec の 1 行は 11 章（セキュリティ要件）に置いた。シークレット混入対策など、GitHub の設定もこの章に書いているため。
+- `docs/security-settings.md` の冒頭には「人間のスクリーンショットをもとに書く」とあるが、この節は `gh api` の結果から作った。節の最初にそう書いた。

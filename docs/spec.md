@@ -674,6 +674,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - Docker：slim ベースイメージ、非 root ユーザーで実行、不要なファイルは `.dockerignore`。ベースイメージと uv のイメージはタグと digest で固定し、Dependabot が更新する（Dependabot は `FROM` の行しか読まないので、uv も `FROM` の段にする）。API のイメージからはシステムの pip を消す（使わず、中の部品に脆弱性が見つかったため。#21）。
 - 依存：`pip-audit` を CI で実行、Dependabot を有効化。
 - GitHub Actions：`permissions` は最小限（既定は `contents: read`）、外部 Action はバージョンを固定。
+- main のブランチ保護：Rulesets で、削除と force push を禁止し、PR（承認 0）と `ci` の成功を必須にした。管理者も例外にしない（2026-10-20、#2・Issue #53。設定と確かめた結果は `docs/security-settings.md`）。
 - シークレット混入対策：GitHub の Secret Protection（secret scanning）と Push protection を有効にした（2026-10-16、#19。リポジトリは public。状態の記録は `docs/security-settings.md`）。CI で gitleaks が全履歴を検査する。
 - 配布したイメージの出どころ：CD で push したイメージに、ビルドの来歴と SBOM（SPDX 2.3）の attestation を `actions/attest` で付ける（#22）。GitHub Free・Pro・Team では public のリポジトリでしか使えないので、**リポジトリを private に戻すと CD が失敗する**（Enterprise Cloud が要る）。パッケージは private のままで使える。手元からの検証の手順と記録は `docs/provenance.md`。
 - 動いている API への攻撃の検査（DAST）：CD で、外部と通信できない API のコンテナに OWASP ZAP の API スキャン（`/openapi.json`）をかけ、High の警告があれば push しない（#23）。初回の結果と対応、手元での実行の手順は `docs/dast.md`。
@@ -731,7 +732,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | # | 機能 | 受け入れ条件 | 状態 |
 |---|---|---|---|
 | 1 | 雛形 | `/health` が 200、pytest・ruff・mypy が通る、Dockerfile でビルドできる | 完了 |
-| 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 進行中（ci.yml 導入済み。PR での実行確認とブランチ保護の設定が残っている） |
+| 2 | CI | PR で ci.yml が実行され、失敗時に PR がマージできない | 完了（2026-10-20、Issue #53。main を Rulesets で保護し、`ci` が失敗した PR #62 がマージできないことを確認。記録は `docs/security-settings.md`） |
 | 3 | 天気取得（現在） | `/weather` の `current` が仕様どおり。天気コードの分類（未知コードは `unknown`）。外部APIはモックでテスト | 完了 |
 | 4 | 天気予報（時間・日） | `hourly` 24件・`daily` 7日分が仕様どおり。日付は現地の日付で区切られる | 完了 |
 | 5 | キャッシュ | TTL 内は外部APIを呼ばない。メモリ → Redis に切り替え可能 | 完了 |
