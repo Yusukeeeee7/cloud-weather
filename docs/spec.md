@@ -687,7 +687,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 
 | # | 検査するもの | 使うもの | 実行する場所 |
 |---|---|---|---|
-| 18 | 自分のコードの危ない書き方（SAST） | ruff の `S` ルール | `ci.yml`（いまの ruff の手順） |
+| 18 | 自分のコードの危ない書き方（SAST） | ruff の `S` ルール、CodeQL | `ci.yml`（いまの ruff の手順）、`codeql.yml` |
 | 19 | シークレットのコミット | GitHub の Push protection、gitleaks | GitHub の設定、`ci.yml` |
 | 20 | ワークフローと Dockerfile の書き方 | zizmor、actionlint、hadolint | `ci.yml` |
 | 21 | イメージの中の脆弱性（OS のパッケージを含む） | ベースイメージの digest 固定、Trivy | `Dockerfile`、`ci.yml`、`cd.yml` |
@@ -695,7 +695,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 | 23 | 動いている API への攻撃（DAST） | OWASP ZAP の API スキャン | `cd.yml` |
 | 24 | リポジトリ全体の対策の点数 | OpenSSF Scorecard | Scorecard のワークフロー |
 
-CodeQL は、private のリポジトリでは有料（GitHub Code Security のライセンスが要る。公式ドキュメント「About code scanning」で確認、2026-10-16。WebFetch の要約で確認し、原文は読んでいない）。#18 からは外し、リポジトリを公開するときに入れる（#18 の計画で決定）。
+CodeQL は、private のリポジトリでは有料（GitHub Code Security のライセンスが要る。公式ドキュメント「About code scanning」で確認、2026-10-16。WebFetch の要約で確認し、原文は読んでいない）。#18 では外し、リポジトリを public にしたので、#54 でワークフロー（`codeql.yml`）で入れた（2026-10-20。default setup にしなかったのは、Scorecard の SAST がワークフローの `github/codeql-action/analyze` を数えるため）。必須チェックにはしない（新しいアラートで `CodeQL` が失敗しても、マージは止まらない）。**private に戻すと、ライセンスがないと動かない。**
 
 共通の決まり：
 
@@ -723,6 +723,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | `ci.yml` | PR | gitleaks（#19。最初に実行。全履歴を検査するため checkout は `fetch-depth: 0`。`--redact` で値をログに出さない。外部と通信しない。履歴が浅いとき、またはログに `ERR` の行があるときも失敗にする。v8.30.1 は git が失敗しても終了コード 0 で終わるため）、actionlint・zizmor（`.github/workflows/`。zizmor は offline でトークンを渡さない）・hadolint（`Dockerfile`・`Dockerfile.dev`）（#20。公式のイメージを版と digest で固定し、`--network none` で実行。指摘があれば失敗）、ruff（#18 から `S` ルールを含む）、mypy、pytest（カバレッジ 80% 未満で失敗）、pip-audit、nbmake（サンプルデータ。外部と通信しない。#8 で追加）、docker build → Trivy（#21。イメージを tar にして `--network none` で検査し、修正版のある HIGH・CRITICAL があれば失敗。検査の手順そのものは外部と通信しない。通信するのは、イメージの取得と、その前の手順での脆弱性のデータベースの取得） |
 | `cd.yml` | main へのマージ・`v` で始まるタグ | イメージをビルド → `--network none` で起動してスモークテスト（`scripts/smoke_test.py`。`/health`・`/daylight` が 200、`/cloud-base` が 502。外部と通信できないので、モデルが読めていれば 502、読めていなければ 503）→ DAST（#23。OWASP ZAP の API スキャン。ZAP のコンテナは API のコンテナのネットワークを共有し、外部と通信しない。ZAP が取り込んだ URL が 8 未満（`/openapi.json` の道の数）なら失敗。JSON のレポートを `scripts/zap_high_alerts.py` で読み、High が 1 件でもある・レポートが読めない・API の site がなければ失敗し、push しない。記録は `docs/dast.md`）→ Trivy（#21。`ci.yml` と同じ。失敗したら push しない）→ SBOM（#22。同じ tar から Trivy で SPDX 2.3 の JSON を作る。`--network none`。作れなければ push しない）→ ghcr.io へ push（main は `latest` と `sha-<短いSHA>`、タグはその名前。パッケージは private。#14 で決定。push の後にレジストリの digest を問い合わせ、`sha256:` と 64 桁でなければ失敗）→ 来歴と SBOM の attestation（#22。`actions/attest`。Sigstore で署名し、イメージの隣に置く。ジョブの権限に `id-token: write`・`attestations: write`。push の後の digest の問い合わせや attest が失敗すると、署名のないイメージが push 済みになるので、CD を再実行して付け直す） |
 | `scorecard.yml` | main への push・schedule（毎週土曜 01:30 UTC） | OpenSSF Scorecard（#24。`ossf/scorecard-action` v2.5.0、`publish_results: true`）。SARIF を `github/codeql-action/upload-sarif` で Security タブに送る。トークンは既定の `GITHUB_TOKEN`、ワークフロー全体は `contents: read`、ジョブだけ `security-events: write`・`id-token: write`。点で失敗にはしない |
+| `codeql.yml` | main 向けの PR・main への push | CodeQL（#18 の残り、#54）。`github/codeql-action` の `init`・`analyze` v4.38.3（`scorecard.yml` と同じ SHA）。言語は `python`・`javascript-typescript`（matrix、`build-mode: none`）、クエリは既定の組。ワークフロー全体は `contents: read`、ジョブだけ `security-events: write`。結果は Security タブ（コードスキャン）。PR では同じ PR の古い実行を止め、main への push の実行は止めない。Ruleset の必須チェックではない |
 | `notify.yml` | schedule（毎朝） | コンテナを実行して Discord に通知 |
 
 #18〜#24 で、上のワークフローにセキュリティの検査を足す（どこに何を足すかは「11. セキュリティ要件」の表）。CodeQL と Scorecard は、きっかけが違うので別のワークフローにする。表は、それぞれの機能が完了したときに更新する。
@@ -748,7 +749,7 @@ CodeQL は、private のリポジトリでは有料（GitHub Code Security の�
 | 15 | UI（任意） | 現在の天気・予報・日照・雲底を表示する簡単な画面。過去 24 時間の雲量をスライダーで見られる（`/cloud-history`）。24 時間の予報と過去 24 時間に、各時刻の雲底の予測を出す（`/cloud-base/forecast`・`/cloud-base/history`）。雲があっても日差しが通るかを、日照時間と日射で見られる（`/sunshine`）。どれも 2026-10-14 に追加 | 完了（2026-10-14、手元のブラウザで人間が確認） |
 | 16 | 誤差の分析 | 検証の年（2024）で、上限より下の行の誤差を、高さの帯・符号（高すぎ／低すぎ）・都市・季節に分けて出す。分析の関数はテスト付きで `ml/` に置く。結果と、次に試す案（最大 3 つ）を `docs/model-card.md` に書く。モデルとテストの年には触れない | 完了（次に試す案は `docs/model-card.md` 10 節） |
 | 17 | モデルの改善 | #16 で決めた案を、計画で決めた手順で比べる。テストの年（2025）は最後に 1 回だけ評価し、成功基準の判定と前のモデルとの比較を `docs/model-card.md` に書く。採る場合は `model_version` を替え、`/cloud-base` のテストが通る | 完了。`two_stage_30` を採り、v2 に替えた。テストの年で 2 都市とも成功基準を満たした（`docs/model-card.md` 11 節） |
-| 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する（テストの `assert` は「11. セキュリティ要件」の例外）。CodeQL は、リポジトリを公開するときに入れる（11 を参照） | 完了（2026-10-16） |
+| 18 | SAST | ruff の `S` ルールを有効にし、`ruff check .` が通る。既存の指摘は直すか、理由を書いて 1 件ずつ除外する（テストの `assert` は「11. セキュリティ要件」の例外）。CodeQL（Python・JavaScript）が PR と main への push で実行され、結果が Security タブに出る（#54） | 完了（2026-10-16）。CodeQL は実装済み（2026-10-20、Issue #54。PR #64 で初回の指摘 0 件、確認用 PR #65 で検出を確認。記録は `docs/security-settings.md`。main への push の実行はマージ後に確認） |
 | 19 | シークレットのコミット防止 | GitHub の secret scanning と Push protection が有効なことを、人間が設定画面で確かめて記録する。CI で gitleaks がリポジトリの全履歴を検査し、見つかったら失敗する。検出されることの確かめ方は計画で決める（本物のシークレットは使わない） | 完了（2026-10-16。設定は `docs/security-settings.md`。PR の CI で gitleaks の手順が成功） |
 | 20 | ワークフロー・Dockerfile の検査 | CI で zizmor・actionlint（`.github/workflows/`）と hadolint（`Dockerfile`・`Dockerfile.dev`）が実行され、指摘があれば失敗する。既存の指摘は直すか、理由を書いて 1 件ずつ除外する | 完了（2026-10-16。PR の CI で 3 つの手順が成功） |
 | 21 | イメージの検査 | `Dockerfile` のベースイメージと uv のイメージを digest で固定し、Dependabot が更新できる形にする。CI（PR）と CD（スモークテストの後、push の前）で Trivy がイメージを検査し、修正版のある HIGH・CRITICAL の脆弱性があれば失敗する（CD では push しない） | 実装済み（PR の CI と、main へのマージ後の CD の実行で確認） |

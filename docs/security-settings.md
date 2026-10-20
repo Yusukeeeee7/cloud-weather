@@ -15,7 +15,7 @@ AI は設定画面を見られないので、人間のスクリーンショッ�
 
 - Secret Protection と Push protection は、この日に人間が「Enable」を押して有効にした（それまでは無効）。
 - 「Push protection for yourself」は、画面の説明文のとおり public のリポジトリへの push に効く。
-- 同じ画面の CodeQL analysis は未設定（#18 で「公開するときに入れる」と決めたもの。別の Issue で扱う）。
+- 同じ画面の CodeQL analysis は、この時点では未設定だった（#18 で「公開するときに入れる」と決めたもの）。2026-10-20 に default setup ではなくワークフローで入れた（下の「CodeQL（#18 の残り、Issue #54）」）。
 
 役割の分担：
 
@@ -62,3 +62,33 @@ CI が壊れて誰もマージできなくなったとき：
 1. 人間が Settings → Rules → Rulesets → `main` の Enforcement status を **Disabled** にする。
 2. 直す PR をマージする。
 3. **Active** に戻し、`gh api repos/.../rulesets/25472510 --jq .enforcement` が `active` になったことを確かめる。
+
+## CodeQL（#18 の残り、Issue #54）
+
+入れた日：2026-10-20。設定画面の default setup ではなく、ワークフロー `.github/workflows/codeql.yml` で入れた（設定はファイルに残る）。下の結果は、AI が `gh api`（`code-scanning/analyses`・`code-scanning/alerts`・`commits/<SHA>/check-runs`）で読んだもの。
+
+たとえると、部品の流れを入口から出口まで追いかける検品係。外から来た値（API の入力）が、ファイルを開く・画面に HTML として書くなどの危ない場所まで届いていないかを見る。#18 の ruff の `S`（図面と見比べる係）と役割が違う。
+
+| 項目 | 値 |
+|---|---|
+| きっかけ | main 向けの PR、main への push |
+| 言語 | `python`（`/language:python`）、`javascript-typescript`（`/language:javascript-typescript`）。どちらも `build-mode: none` |
+| クエリ | 既定の組（Python 43 ルール、JS 87 ルール。初回の解析の `rules_count`） |
+| Action | `github/codeql-action/init`・`analyze` v4.38.3（`scorecard.yml` の `upload-sarif` と同じ SHA） |
+| 権限 | 最上位 `contents: read`、ジョブ `contents: read`・`security-events: write` |
+| PR に付く check run | ジョブの `Analyze (python)`・`Analyze (javascript-typescript)`（アプリ `github-actions`）と、結果の `CodeQL`（アプリ `github-advanced-security`）。Scorecard の SAST が数えるのは後者 |
+| マージとの関係 | Ruleset の必須チェックではない。新しいアラートで `CodeQL` が `failure` になっても、マージは止まらない（`mergeStateStatus: UNSTABLE`）。PR の画面で見て直す |
+
+確かめたこと：
+
+| # | 確かめ方 | 結果 |
+|---|---|---|
+| 0 | 入れる前に `GET code-scanning/analyses?tool_name=CodeQL`・`alerts?tool_name=CodeQL` | どちらも 0 件（コードスキャンには Scorecard の解析 21 件だけ） |
+| 1 | 手元の Docker で、CI と同じ actionlint・zizmor | どちらも指摘なし |
+| 2 | 入れた PR #64（コミット `7f6933e`） | `Analyze (python)`・`Analyze (javascript-typescript)`（run 39425225068）が成功。`CodeQL`（`github-advanced-security`）も `success`。解析が 2 つの category で 1 つずつでき、指摘は **0 件** |
+| 3 | わざと危ない書き方を入れた PR #65（ブランチ `feature/issues_54-fail`、コミット `3c060ab`） | `app/routers/health.py` に、API の入力 `path` をそのまま `Path(path).read_text()` に渡す道を足した。`Analyze (python)`（run 39425694014）は成功し、`CodeQL` が `failure`（「1 new alert including 1 high severity security vulnerability」）、アラート #10 `py/path-injection`（重大度 error、セキュリティの重大度 high）が 22 行目に出た。`ci` は成功。マージせずに閉じ、ブランチは残した |
+| 4 | 初回の既存の指摘 | 0 件（シナリオ 2）。直すものも、閉じるものもなかった |
+
+- PR #65 のアラート #10 は PR の ref（`refs/pull/65/merge`）にだけ付き、main のアラート（`state=open`）は 0 件のまま。
+- 人間が Security タブ（Code scanning）で、ツール CodeQL の結果が出ていることを見る（AI は画面を見られない）。
+- リポジトリを private に戻すと、GitHub Code Security のライセンスがないと CodeQL は動かない（spec 11 章）。
