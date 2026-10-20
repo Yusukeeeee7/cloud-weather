@@ -164,3 +164,6 @@ Python のパッケージはなし。外部 Action を 2 つ足す（`github/cod
 - **入力**（同じ SHA の `init/action.yml`・`analyze/action.yml` の原文を `gh api` で取得して読んだ）：`languages`・`build-mode`（matrix で 1 ジョブ 1 言語のときだけ使える。`none` は「すべてのインタープリタ型の言語」で使える）・`category`。`analyze` の `upload` の既定は `always`、`token` は既定の `GITHUB_TOKEN` に任せる（`security-events: write` が要る）。Python・JS のビルドの要否について、GitHub の docs の原文は読んでいない（action.yml の説明による）。
 - **`concurrency`**（計画は「`ci.yml` に合わせる」）：`codeql.yml` は main への push でも動くので、グループを `codeql-<PR 番号 か コミットの SHA>` にし、古い実行を止めるのは PR のときだけにした（main の解析を途中で止めないため）。
 - **シナリオ 1**：手元の Docker で、CI と同じイメージ・引数の actionlint（終了コード 0）と zizmor（`No findings to report`、終了コード 0）が通った。
+- **シナリオ 2・4**：PR #64 で 2 つのジョブと `CodeQL`（アプリ `github-advanced-security`）が成功。初回の指摘は 0 件で、直すもの・閉じるものはなかった（質問 5 の手順は使わなかった）。`tests/fixtures/` の HTML の指摘も出なかったので、`paths-ignore` は足していない。
+- **シナリオ 3 の書き方**：CodeQL の `py/path-injection` の原文（`github/codeql` の `PathInjection.ql`。`@precision high`、`@problem.severity error`）と、FastAPI の引数を外からの入力として扱う `FastApi.qll` を `gh api` で取得して読んでから決めた。`app/routers/health.py` に `@router.get("/debug-file")` で `Path(path).read_text()` を返す関数を足した（ruff が通る形にした）。結果はアラート #10（22 行目）。
+- **必須チェックでないことの影響**（計画に書いていなかった）：PR #65 は `CodeQL` が `failure` でも `mergeStateStatus: UNSTABLE` でマージできる状態だった。質問 7 の決定どおりで、`docs/security-settings.md` に書いた。
