@@ -2589,3 +2589,85 @@ AI の誤りではないが記録しておくこと：
 - 人間の学び：（要記入）
 
 ---
+
+### 2026-10-20 #2 CI の残り：main のブランチ保護（Rulesets）（Issue #53 / PR #61、確認用 PR #62、記録 PR #（要記入））
+
+**指示したこと（プロンプトの要約）**
+- `/plan-feature issue #53を進めたいです`（機能番号は渡していない。Issue の本文の「spec #2 と同じ作業」から、AI が機能 #2 として計画した）。
+- 計画への回答：「全部おすすめで進めて」（質問 1〜8）。
+- `/implement-feature 2 53`。
+- Ruleset の作成（人間が設定画面で）：「できた」→「足した」→「これでできてる？」→「保存した」。
+- 確認用 PR #62 を画面で見て：「feature/issues_53-fail の方は、merge できないですね。feature/issues_53 は、merge 出来る」。
+- `/review` →「全部直して」→ PR #61 をマージし、`pull origin main` のあと `/dev-log`。
+
+**渡したコンテキスト**
+- CLAUDE.md / 使った skill：CLAUDE.md（自動読み込み）、メモリ（シェル環境：`gh` のフルパス、uv の PATH など）、`/plan-feature`、`/implement-feature`、`/review`、`/dev-log`
+- 明示したファイル：なし（Issue 番号だけ。AI が Issue #53 の本文、`docs/scorecard.md`、spec の 11・13・14 章、`docs/plans/02-ci.md`・`24-scorecard.md`、`.github/workflows/*.yml`、`docs/security-settings.md` を読んだ）
+- 公式の文書：Scorecard の `docs/checks.md`（`ossf/scorecard`）、GitHub Docs の `available-rules-for-rulesets.md`（`github/docs`）。どちらも `gh api` で原文を取得して読んだ（要約ではない）。
+- 足りなかった・余計だった情報：
+  - 画面（Rulesets の設定）の項目名を AI が知らず、記憶で書いた。実際の画面と合っていたかは聞いたが、答えはまだない：（要記入）
+
+**TDD**
+- この機能は GitHub の設定なので、pytest のテストではなく、`gh api` と PR で確かめるシナリオ 0〜5 にした（計画のテスト一覧）。
+- 先に書いたテスト：シナリオ 0（設定の前に `GET rules/branches/main`）。Red にあたるのはシナリオ 3（わざとテストを 1 件失敗させる PR #62）。
+- Red を確認したか：はい。シナリオ 0 は `[]`（何も効いていない）。シナリオ 3 は、`ci`（run 39419042616）が `failure`（`test_fails_on_purpose` の 1 件だけが失敗、2,035 件は通過）、`mergeStateStatus: BLOCKED`、人間が画面でもマージできないことを見た。PR #62 はマージせずに閉じ、ブランチは残した。
+- 最初の設定で通ったか：いいえ（やり直し 2 回）。
+  - 1 回目：必須チェックが空（`required_status_checks: []`）。
+  - 2 回目：チェックの名前が `required_status_checks` になった。どのワークフローも出さない名前なので、PR #61 は `ci` が成功しても `BLOCKED` になった。
+  - 3 回目：「これでできてる？」のときは、まだ保存されていなかった（`updated_at` が変わっていない）。保存した後、`context: ci`・`integration_id: 15368`（GitHub Actions。`gh api apps/github-actions` で確認）になった。
+  - どれも、AI が `gh api` で読んで気づいた。
+- シナリオ 4：PR #61 は、`1718d0c` のとき人間が画面でマージできることを見た。`d6182b1`・`b2cc410` でも `ci` が成功して `CLEAN`（AI が確認）。
+- シナリオ 5：マージ後の Scorecard（run 39421355472、コミット `a1dfe38`）で Branch-Protection が 0 → 3、合計 5.3 → 5.5。計画の見込み（3 以上 6 未満）の範囲。記録は `docs/scorecard.md` の「設定後の点」。
+- 直接の push・force push・削除は試していない（計画の質問 6）。
+- 手元のチェック（`/review` のとき）：pytest 2,035 件成功（カバレッジ 99.64 %）、ruff・ruff format は通った。mypy は uv が起動するファイルがアプリケーション制御ポリシーで止められて実行できなかった（`os error 4551`）。差分は docs だけで、PR の CI では mypy を含めて成功した。
+
+**AIの誤り・ハルシネーション**
+| 内容 | 気づいた仕組み | 修正 | 再発防止 |
+|---|---|---|---|
+| **人間に画面の操作を頼むとき、間違えやすいところと、設定後に AI が読む値を先に伝えなかった**。必須チェックの設定が 2 回失敗した（空、名前が `required_status_checks`）。「候補の一覧から `ci` をクリックして選ぶ。Enter で確定しない」は、2 回目の失敗の後に初めて伝えた | AI が `gh api` で設定を読んだ（2 回とも） | 操作を詳しく伝え直し、3 回目で `context: ci` になった | 画面の操作を頼むときは、間違えやすい操作と、AI が後で確かめる値（例：`context: ci`）を最初に書く |
+| 画面の項目名（Restrict deletions など）を、記憶で書いた | 計画を書くとき、AI 自身が「AI の記憶」と明記した | 人間に合っていたかを聞いた（答えはまだない） | 画面の項目名は公式ドキュメントで確かめるか、記憶だと明記する（今回は明記した） |
+| `/review` の指摘を直すとき、dev-log の #2 の空欄に「非公開のときに使えたかは確かめないまま、public にした」と書いた。人間が試したかどうかを AI は知らない | 書いた直後に、根拠があるかを見直した（AI 自身） | 「非公開のときに使えたかの記録はない」に直した（コミットの前） | 記録にないことは「記録はない」と書き、どうだったかを決めつけない |
+| PR #61 の本文に `Closes #53` を入れた。計画では Scorecard の点を別の PR で記録するので、点を記録する前に Issue が閉じる形だった | `/review`（AI 自身） | 人間の指示で `Refs #53` に変え、GitHub の閉じる Issue の一覧から外れたことを確かめた | PR の本文の閉じるキーワードは、計画の「進め方」の最後の PR に付ける |
+| `docs/security-settings.md` の新しい節を `gh api` の結果から作ったが、冒頭の「人間のスクリーンショットをもとに書く」を直さなかった。シナリオ 4 の「人間がマージできることを見た」が、どのコミットのことかを書かなかった | `/review`（AI 自身） | 冒頭を「スクリーンショットか `gh api` の結果」に、シナリオ 4 をコミットごとに分けて書いた | 既存の文書に節を足すときは、冒頭の説明と食い違わないかを見る |
+| `git push` の直後に `gh run list --limit 1` で CI の実行を取り、前のコミットの実行を見てしまった（PR の状態は `UNKNOWN` だった） | 出力の `headSha` が新しいコミットと違った（AI 自身） | `headSha` で絞って取り直した | push の直後の実行は `headSha` で絞って取る |
+| Git Bash で `gh api /apps/github-actions` と書き、先頭の `/` がファイルのパス（`C:/Program Files/Git/apps/...`）に書き換えられた | `gh` のエラー（AI 自身） | `/` を付けずに実行した | `gh api` の道は先頭に `/` を付けない |
+
+- 誤りではないが記録すること：
+  - `pull_request` のルールに、選んでいない既定値 `require_extra_approval_for_unattributed_changes: true` が入っていた。公式ドキュメントの原文で、Copilot が開いた PR の承認を 1 つ増やす設定で、承認 0 のときは効かないことを確かめ、変えずに記録した。
+  - 計画では「既定のトークンでは、最新の取り込みの条件は点に影響しない」と書いた。点は見込みどおり 3 だったが、Scorecard の details には `'up-to-date branches' is disabled` の Warn が出た。点の計算でどう扱われたかは確かめていない（`docs/scorecard.md` に書いた）。
+  - 「これでできてる？」のメッセージに画像は付いていなかった。AI は画面を見られないので、`gh api` の `updated_at` が変わっていないことから「まだ保存されていない」と伝えた。
+- 人間が気づいた誤りで、会話に出ていないもの：（要記入）
+
+**セキュリティ上の確認**
+- シークレットは使っていない。PAT は作っていない（Scorecard は既定のトークンで Rulesets を読めた）。`gh` のトークンは出力していない。
+- リポジトリの設定は、AI は書き込んでいない（`gh api` は GET だけ）。Ruleset は人間が画面で作った。
+- バイパスなし（`bypass_actors: []`、`current_user_can_bypass: never`）。管理者も例外にしない。CI が壊れたときの戻し方（Disabled → 直す → Active に戻して `gh api` で確かめる）を `docs/security-settings.md` に書いた。
+- 依存パッケージの追加はない。アプリのコード・ワークフローは変えていない。
+- 外部通信：
+  - アプリから・テストから：0 回。
+  - GitHub：`gh api` の GET（Issue、リポジトリ、Rulesets、効いているルール、ブランチ保護、check run、`apps/github-actions`、`ossf/scorecard` と `github/docs` の文書、GraphQL で閉じる Issue の確認）、`gh pr create` 2 回（#61・#62）、`gh pr close` 1 回（#62）、`gh pr edit` 1 回（#61 の本文）、`gh run list`・`gh run view`・`gh run watch`・`gh pr view` を数回。`git push` 4 回（`feature/issues_53` 3 回、`feature/issues_53-fail` 1 回）と、この記録の push。
+  - `curl` で `api.scorecard.dev` 1 回。
+- 破壊的な操作：force push・ブランチ削除・履歴の書き換え・`rm -rf` はしていない。確認用のブランチ `feature/issues_53-fail` は残した。
+- コミットは、ファイルを名前で指定して add した。コミットの前に `git status` と `git branch --show-current` を見た。
+
+**コスト**
+- Claude 利用量：（要記入）
+- GitHub Actions の実行回数・時間：
+  - CI 4 回：`1718d0c` 2 分 17 秒（成功、run 39418111284）、`e45d3d2`（PR #62）1 分 19 秒（失敗、わざと、run 39419042616）、`d6182b1` 2 分 15 秒（成功、run 39419961287）、`b2cc410` 2 分 10 秒（成功、run 39420940693）。
+  - マージ後：Scorecard 48 秒（成功、run 39421355472）、CD（run 39421355533）：（要記入。この記録を書いた時点で実行中）。
+  - この記録の PR の CI：（要記入）
+- 外部API呼び出し：上の「外部通信」のとおり（アプリからは 0 回）。
+
+**学び・CLAUDE.md / skills への反映**
+- 設定は「画面で設定した」で終わらせず、API で読み直すと、見た目では分からない誤り（チェックの名前）に気づける。今回は 2 回とも、それで気づいた。
+- Scorecard の Branch-Protection は段ごとの採点で、承認の必須（段 2）がないと、CI の必須（段 3）は点に入らない。1 人の開発では 3 点が上限になる。点のためでなく、spec #2 の受け入れ条件のために CI の必須を入れた。
+- 変更案（勝手には変えていない）：
+  - `plan-feature`：「人間に設定画面の操作を頼む計画では、間違えやすい操作と、設定後に AI が読んで確かめる値（API の項目と期待値）を書く」を、手順 3 に足す。
+  - `plan-feature` か `implement-feature`：「PR の本文の閉じるキーワード（`Closes`）は、計画の進め方で最後になる PR に付ける」を足す。
+  - メモリ（シェル環境。リポジトリの外）：「`gh api` の道は先頭に `/` を付けない（Git Bash がパスに書き換える）」「push の直後の `gh run list` は `headSha` で絞る」を足す。
+- 申し送り：
+  - Dependabot alerts を有効にしたかの記録がない（#2 の dev-log の空欄）：（要記入）
+  - Issue #53 は、この記録の PR（`Closes #53`）のマージで閉じる。
+- 人間の学び：（要記入）
+
+---

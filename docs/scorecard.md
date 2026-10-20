@@ -75,7 +75,7 @@
 
 | 項目 | 点 | 対応 | 理由 |
 |---|---|---|---|
-| Branch-Protection | 0 | 直す（別の Issue） | main に Rulesets を設定する（force push・削除の禁止、CI の成功を必須に）。spec #2 の「ブランチ保護の設定が残っている」と同じ作業。Rulesets は既定の `GITHUB_TOKEN` で Scorecard が読める（README）ので、PAT は要らない |
+| Branch-Protection | 0 | 直した（#53。設定後は 3 点。下の「設定後の点」） | main に Rulesets を設定する（force push・削除の禁止、CI の成功を必須に）。spec #2 の「ブランチ保護の設定が残っている」と同じ作業。Rulesets は既定の `GITHUB_TOKEN` で Scorecard が読める（README）ので、PAT は要らない |
 | SAST | 0 | 直す（別の Issue） | CodeQL。#18 で「リポジトリを公開するときに入れる」と決め、いまは public なので条件を満たしている。ruff の `S` ルール（#18）は Scorecard の数える道具に入っていない（数えるのは CodeQL・SonarCloud など） |
 | Security-Policy | 0 | 直す（別の Issue） | `SECURITY.md` を置き、脆弱性の報告の窓口を書く（GitHub の非公開の脆弱性報告を使う予定。設定は Issue で確かめる） |
 | License | 0 | 人間が決める（別の Issue） | 付けるか、どのライセンスにするかは持ち主が決めること |
@@ -86,3 +86,28 @@
 | CII-Best-Practices | 0 | 直さない | 外部のサイト（OpenSSF Best Practices）での自己申告で、このリポジトリの学習の目的から外れる |
 | CI-Tests | 8 | 直さない | 7 つの PR のうち 1 つで、CI の成功が数えられていない。直近にマージした 7 つ（#40・#42・#44・#47・#48・#49・#50）のうち、head のコミットの CI が成功していないのは #48（`cancelled`。dev-log の #23 の記録のとおり、dev-log のコミットの CI が途中で止まったままマージした）だけ。Scorecard がどの 7 つを見たかは出力にないので、これは `gh api` で各 PR の check run を見た推定 |
 | Signed-Releases | -1 | 対象外 | GitHub のリリースを作っていない。配布しているイメージには #22 で来歴と SBOM を付けている |
+
+## 設定後の点（Branch-Protection、#53）
+
+**合計 5.5 / 10、Branch-Protection 3 / 10**（2026-10-20T12:19:33Z。PR #61 のマージ後の main への push の実行、run 39421355472、コミット `a1dfe38`。Scorecard v5.6.0）
+
+- `api.scorecard.dev` の JSON を保存し、Branch-Protection の `score`・`reason`・`details` をそのまま写した（手で写していない）。ほかの項目の点は見ていない（合計が 5.3 から 5.5 に上がったことだけ）。
+- 設定の中身は `docs/security-settings.md` の「main のブランチ保護」。
+- 理由：branch protection is not maximal on development and all release branches
+
+| 判定 | details（Scorecard の出力） |
+|---|---|
+| Info | 'allow deletion' disabled on branch 'main' |
+| Info | 'force pushes' disabled on branch 'main' |
+| Info | 'branch protection settings apply to administrators' is required to merge on branch 'main' |
+| Info | status check found to merge onto on branch 'main' |
+| Info | PRs are required in order to make changes on branch 'main' |
+| Warn | 'stale review dismissal' is disabled on branch 'main' |
+| Warn | branch 'main' does not require approvers |
+| Warn | codeowners review is not required on branch 'main' |
+| Warn | 'last push approval' is disabled on branch 'main' |
+| Warn | 'up-to-date branches' is disabled on branch 'main' |
+
+- 点の見方（公式の `docs/checks.md` の Branch-Protection の節。#53 の計画のとき `gh api` で原文を取得して読んだ）：段 1（force push・削除の禁止）を満たして 3 点。段 2 は「承認 1 人以上」を満たさないので、段 3 の必須チェック（`status check found`）は点に入らない。計画の見込み（3 以上 6 未満）の範囲。
+- 段 2 で「管理者」と付いた条件（PR の必須、最新の取り込み、最後の push の承認）は、既定のトークンでは満たしたものとして数える、と `checks.md` にある。それでも details には `'up-to-date branches' is disabled` などの Warn が出た。Rulesets は既定のトークンで読めるので、読めた値をそのまま出しているのだと思われるが、点の計算でどう扱われたかは確かめていない。
+- これ以上上げるには、承認の必須（段 2）が要る。1 人の開発なので入れない（Code-Review と同じ理由）。
