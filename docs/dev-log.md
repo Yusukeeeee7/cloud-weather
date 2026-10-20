@@ -2671,3 +2671,96 @@ AI の誤りではないが記録しておくこと：
 - 人間の学び：（要記入）
 
 ---
+
+### 2026-10-20 #18 SAST の残り：CodeQL の導入（Issue #54 / PR #64、確認用 PR #65、記録 PR #66）
+
+**指示したこと（プロンプトの要約）**
+- `/plan-feature issue #54を進めたいです`（機能番号は渡していない。Issue の本文の「#18 で公開するときに CodeQL を入れると決めた」から、AI が spec #18 の残りとして計画した。計画のファイル名 `18-codeql.md` も質問 9 で確かめた）。
+- 計画への回答：「全部おすすめで進めてください」（質問 1〜9）。
+- `/implement-feature 18 54` →（シナリオ 0 の Red を示して止まった後）「実装へ進んで」→ 待ちの間に「進めてください」を 3 回。
+- spec の変更案 1〜5 への回答：「全部おすすめで進めてください」。
+- `/review` →「おすすめで」（🟡 2 つ・🟢 2 つをすべて直す。spec の状態は案 (a)）。
+- 「今回のこれはどういう修正であり、なにをしているのかわかりやすく説明してください。CodeQLってなに？」
+- 「問題なさそうなので、mergeしていい？」→「マージしました」（PR #64）→「進めてください」→「mergeしました /dev-log」（PR #66）。
+
+**渡したコンテキスト**
+- CLAUDE.md / 使った skill：CLAUDE.md（自動読み込み）、メモリ（シェル環境：`gh` のフルパス、uv の PATH、Docker Desktop の起動、日本語を含む Python はファイルにして `PYTHONUTF8=1` で実行、など）、`/plan-feature`、`/implement-feature`、`/review`、`/dev-log`
+- 明示したファイル：なし（Issue 番号だけ。AI が Issue #54・#53 の本文、`docs/plans/18-sast.md`・`02-branch-protection.md`、`docs/scorecard.md`、spec の 11・13・14 章、`.github/workflows/*.yml`、`.github/dependabot.yml`、`docs/security-settings.md` を読んだ）
+- 公式の情報（どれも `gh api` で原文を取得して読んだ。要約ではない）：
+  - Scorecard の `docs/checks.md` の SAST の節と、v5.6.0 のソース（`checks/evaluation/sast.go`、`checks/raw/sast.go`、`probes/sastToolConfigured`、`probes/sastToolRunsOnAllCommits`）
+  - GitHub の CodeQL のひな形（`actions/starter-workflows` の `code-scanning/codeql.yml`）
+  - `github/codeql-action` のタグ一覧と、v4.38.3 の `init/action.yml`・`analyze/action.yml`
+  - CodeQL の `py/path-injection` のクエリ（`PathInjection.ql`）と例、FastAPI のモデル（`FastApi.qll`）
+- 読んでいないもの：GitHub Docs の、Python・JS のビルドの要否の説明の原文（`action.yml` の `build-mode` の説明「`none` はすべてのインタープリタ型の言語で使える」で代えた。計画に書いた）
+- 足りなかった・余計だった情報：
+  - 機能番号が Issue に書かれていないので、AI が #18 の残りと判断した（質問 9 で確かめた）。
+
+**TDD**
+- この機能はワークフローの追加なので、pytest のテストではなく、`gh api` と PR で確かめるシナリオ 0〜7 にした（計画のテスト一覧）。
+- 先に書いたテスト：シナリオ 0（入れる前に `code-scanning/analyses?tool_name=CodeQL`・`alerts?tool_name=CodeQL`）。Red にあたるのはシナリオ 3（わざと危ない書き方を入れる PR #65）。
+- Red を確認したか：はい。
+  - シナリオ 0：CodeQL の解析もアラートも 0 件。コードスキャンには Scorecard の解析 21 件だけ。
+  - シナリオ 3：`app/routers/health.py` に、API の入力 `path` をそのまま `Path(path).read_text()` に渡す関数を足した。`CodeQL` の check run が `failure`（「1 new alert including 1 high severity security vulnerability」）、アラート #10 `py/path-injection` が 22 行目に出た。`ci` は成功（run 39425694151）。マージせずに閉じ、ブランチは残した。
+- 最初の実装で通ったか：はい（`codeql.yml` は 1 回目で、手元の actionlint・zizmor も、PR #64 の CodeQL の 2 つのジョブも成功した）。`/review` の後にコメント 1 か所を直した。
+- シナリオ 2・4：PR #64 の初回の解析は、Python 43 ルール・JS 87 ルールで指摘 0 件。直すもの・閉じるものはなかった（計画の質問 5 の手順は使わなかった）。
+- シナリオ 6：マージ後の main への push で CodeQL（run 39430900751）が成功し、main の解析が 2 つ（指摘 0 件）。
+- シナリオ 7：同じ push の Scorecard（run 39430900807、コミット `74c7716`）で SAST が 0 → 7、合計 5.5 → 5.9。理由「SAST tool detected but not run on all commits」、details「4 commits out of 30 are checked with a SAST tool」。計画の見込み（7 以上）の範囲。
+- 手元のチェック（`/review` のとき）：ruff・ruff format は手元で通った。mypy は手元の `uv run mypy` がアプリケーション制御ポリシーで止められた（`os error 4551`。numpy・pandas の import は手元で通った）。Docker（`Dockerfile.dev`）の中で mypy（53 ファイルで問題なし）と pytest（2,035 件成功、カバレッジ 99.64 %）を実行した。差分にコードの変更はない。
+- 実装をわざと壊す確認（skill の手順 7）は、ワークフローには当てはまらないので、シナリオ 3（確認用 PR）で代えた。
+
+**AIの誤り・ハルシネーション**
+| 内容 | 気づいた仕組み | 修正 | 再発防止 |
+|---|---|---|---|
+| **`docs/security-settings.md` に、PR #64 のコミットの番号を推測で書いた**（`55b5b4c`。正しくは `7f6933e`）。check run の URL などは `gh api` の出力から写したが、コミットの番号だけ出力を見ずに書いた | 追記の直後に `git log --oneline -1` を実行して、番号が違うことに気づいた（AI 自身。コミットの前） | `sed` で直し、`grep` で正しい番号が 1 件・間違った番号が 0 件になったことを確かめた | 番号（コミット・run・アラート）は、書く前にコマンドの出力から取る。書いた後に出力と照らす |
+| `codeql.yml` のコメントに「Scorecard の SAST は analyze を数える（default setup では数えない）」と書いた。ソースでは、default setup でも PR の check run は (b)「PR の割合」として数える。数えないのは (a)「ワークフローの有無」だけ | `/review`（AI 自身） | 「analyze があると高い点になる（default setup だと、マージした PR の割合だけで点が決まる）」に直した | 読んだソースの内容を短くまとめるときは、「数えない」のような言い切りが元の条件を落としていないかを見る |
+| spec #18 の状態を、main への push の実行を確かめる前に「完了」にした（受け入れ条件は「PR と main への push で実行され」） | `/review`（AI 自身） | PR #64 では「実装済み（main への push の実行はマージ後に確認）」にし、確かめた後の PR #66 で「完了」に替えた | 受け入れ条件のうち、マージ後にしか確かめられないものがあるときは、それまで「完了」と書かない（#24 と同じ扱い） |
+| 計画のファイル一覧に「`concurrency` は `ci.yml` に合わせる」と書いたが、`ci.yml` は PR だけで動くので、そのままでは main への push に合わない | 実装のとき（AI 自身） | グループを PR の番号かコミットの SHA にし、古い実行を止めるのは PR のときだけにした。計画の「実装時の変更」に書いた | 既存のファイルに「合わせる」と書くときは、きっかけ（PR だけか、push もあるか）が同じかを見る |
+
+- 誤りではないが記録すること：
+  - Docker Desktop が止まっていて、1 回目の actionlint・zizmor が接続のエラーで失敗した。Docker Desktop を起動し、やり直して通った（メモリにある事象）。
+  - `/review` で zizmor を再実行したとき、出力を `2>&1 | tail -1` で切ったため、最後の行が結果ではなかった。終了コードを出すように実行し直して、指摘なし（終了コード 0）を確かめた。
+  - CodeQL は必須チェックにしていないので、PR #65 は `CodeQL` が `failure` でも `mergeStateStatus: UNSTABLE`（マージできる）だった。計画の質問 7 の決定どおりで、`docs/security-settings.md` と spec に書いた。
+  - PR #65 のアラート #10 は PR の ref（`refs/pull/65/merge`）にだけ付き、main のアラートは 0 件のまま。
+  - 「4 commits out of 30」は、PR #64 の 3 つのコミットとマージのコミットが PR #64 に結びつくので 4 と数えられたと考えたが、Scorecard の出力にどのコミットかは出ないので、確かめていない（`docs/scorecard.md` にそう書いた）。
+  - 人間が Security タブの画面で CodeQL の結果を見たかは、会話に出ていない：（要記入）
+- 人間が気づいた誤りで、会話に出ていないもの：（要記入）
+
+**セキュリティ上の確認**
+- 権限：`codeql.yml` の最上位は `contents: read`、ジョブだけ `contents: read`・`security-events: write`。`actions: read`・`packages: read` は、public で既定のパックだけなので付けていない（ひな形のコメントで確かめた）。
+- Action は SHA で固定した（`github/codeql-action` v4.38.3、`scorecard.yml` の `upload-sarif` と同じ SHA。`actions/checkout` v7.0.1）。`persist-credentials: false`。`pull_request_target` は使っていない。手元と CI の actionlint・zizmor で指摘なし。
+- シークレットは使っていない。トークンは既定の `GITHUB_TOKEN`。
+- 確認用 PR #65 の危ないコード（`/debug-file`）は main に入れていない（マージせずに閉じた）。
+- 依存パッケージの追加はない。アプリのコードは変えていない（変えたのは確認用のブランチだけ）。
+- 外部通信：
+  - アプリから・テストから：0 回。
+  - GitHub：`gh api` の GET（Issue、リポジトリ、言語、default setup の状態、Rulesets、code scanning の解析・アラート、check run、`ossf/scorecard`・`actions/starter-workflows`・`github/codeql-action`・`github/codeql` の文書とソース）、`gh pr create` 3 回（#64・#65・#66）、`gh pr close` 1 回（#65、コメントつき）、`gh pr edit` 1 回（#64 の本文）、`gh run list`・`gh pr view` を数回。`gh search code` を 1 回（結果は空）。`git push` 5 回（`feature/issues_54` 3 回、`-fail` 1 回、`-verify` 1 回）と、この記録の push。
+  - `curl` で `api.scorecard.dev` 1 回。
+  - Docker：actionlint・zizmor のイメージ（CI と同じ版と digest。`--network none`）、`Dockerfile.dev` のビルドと、その中での mypy・pytest（`--network none`）。
+- 破壊的な操作：force push・ブランチ削除・履歴の書き換え・`rm -rf` はしていない。確認用のブランチ `feature/issues_54-fail` は残した。
+- コミットは、ファイルを名前で指定して add した。コミットの前に `git status` と `git branch --show-current` を見た。
+
+**コスト**
+- Claude 利用量：（要記入）
+- GitHub Actions の実行回数・時間（`gh run list` の開始と更新の時刻の差）：
+  - PR #64：`7f6933e` CI 2 分 22 秒（run 39425225062）・CodeQL 1 分 7 秒（run 39425225068）、`032a2f6` CI 2 分 15 秒（run 39426366036）・CodeQL 1 分 0 秒（run 39426366062）、`32a3dbc` CI 2 分 14 秒（run 39427818395）・CodeQL 56 秒（run 39427818292）。すべて成功。
+  - PR #65（確認用）：CI 1 分 50 秒（成功、run 39425694151）、CodeQL 57 秒（ジョブは成功、結果の `CodeQL` の check run は `failure`、run 39425694014）。
+  - マージ後（`74c7716`）：CodeQL 1 分 19 秒（run 39430900751）、Scorecard 33 秒（run 39430900807）、CD 5 分 39 秒（run 39430900939）。すべて成功。
+  - PR #66（`9fc701f`）：CI 2 分 38 秒（run 39431904653）、CodeQL 1 分 1 秒（run 39431904544）。どちらも成功。
+  - PR #66 のマージ後（`bd02c63`）の CodeQL・Scorecard・CD（run 39432425312・39432425165・39432425160）：この記録を書いた時点では実行中：（要記入）
+  - この記録の PR の CI・CodeQL：（要記入）
+- 外部API呼び出し：上の「外部通信」のとおり（アプリからは 0 回）。
+
+**学び・CLAUDE.md / skills への反映**
+- Scorecard の点の付け方は、`docs/checks.md` の説明だけでは分からなかった（「CodeQL の check run を PR で探すか、ワークフローの `codeql-action` を探す」とだけある）。ソースを読んで、`analyze` だけを数えること（`upload-sarif` は数えない）と、default setup とワークフローで点が大きく違うこと（入れた直後の見込みは 0〜1 点と 7 点）が分かり、入れ方を決める材料になった。
+- 「本当に見ているか」は、わざと危ない書き方を入れた PR で確かめられる（#53 の `-fail` と同じ形）。今回は、入れる書き方を公式のクエリと FastAPI のモデルで先に確かめたので、1 回で検出された。
+- 変更案（人間の指示「おすすめで進めてください」で、3 つとも `implement-feature` に反映した。2026-10-20。コミットは次の Issue のブランチで行う）：
+  - `implement-feature`：手順 8 に「コミット・run・アラートの番号は、書く前にコマンドの出力から取り、書いた後に出力と照らす」を足す（今回の推測の番号の誤り）。
+  - `implement-feature`：手順 9 に「受け入れ条件のうち、マージ後にしか確かめられないもの（main への push の実行など）があるときは、spec の状態を『実装済み』にし、確かめた後の PR で『完了』にする」を足す（今回の `/review` の指摘。#24 でも同じ扱いだった）。
+  - `implement-feature`：手順 7 の「実装をわざと壊す」に「ワークフローや設定の機能は、わざと検出させる確認用の PR で代える」を足す（#53・#54 で同じやり方になった）。
+- 申し送り：
+  - Scorecard の SAST は、これからマージする PR が CodeQL を通るたびに上がり、最近の 30 のコミットがすべてそうなれば 10 点になる見込み。次の週 1 回の実行（2026-10-24 以降）で点を見る。
+  - `github/codeql-action` の最新は v4.39.0。`scorecard.yml` とそろえるために v4.38.3 にした。Dependabot の `actions` のグループが 2 つのファイルをまとめて上げる。
+  - Issue #54 は PR #66 のマージで閉じた（`gh issue view 54` で `CLOSED` を確かめた）。
+- 人間の学び：（要記入）
+
+---
