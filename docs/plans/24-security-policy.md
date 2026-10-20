@@ -167,3 +167,8 @@ spec 14 章には、この作業の行がない。Scorecard（#24）で決めた
 7. **#54 の dev-log の追記と skill の変更を、この Issue のブランチで一緒にコミットしてよいか。** #54 の `/dev-log` で「次の Issue に混ぜる」と決めた。（おすすめ：最初のコミットとは分けて、別のコミット（`docs: #54 の dev-log と implement-feature の変更`）にする。PR の本文にも書く）
 
 ## 実装時の変更
+
+- **#54 の記録の別のコミット**（質問 7）：`948c05b`（#54 の dev-log と `implement-feature` の変更）。この Issue の `SECURITY.md` は `920a3e4`。
+- **シナリオ 1 の数え方のスクリプト**：作業用のフォルダに置き、リポジトリには入れていない。Go の `\b*` は Python では `(?:\b)*` と書いた。結果：URL 2 つ、メール 0、`Vuln`・`Disclos`・数字の合計 15、見込み 10 点。わざと壊した 3 通り（URL を消す → 4 点で FAIL、メールを足す → FAIL、URL だけ → 6 点で FAIL）を検出した。
+- **シナリオ 3 は計画どおりにできなかった**：人間が送ったのは報告のフォームではなく、Security タブの Overview（Private vulnerability reporting が Enabled）。持ち主が報告の URL を開くと、持ち主の画面になる可能性があり（確かめていない）、報告する人の画面は持ち主からは見られない。Overview と `gh api` で代え、`docs/security-settings.md` にそう書いた。
+- **通知**（計画の「人間にお願いする設定」）：`gh api repos/.../subscription` は、トークンに `notifications` の権限がなく読めなかった（権限は足していない）。人間が Watch を Custom の「Security alerts」だけにした（スクリーンショット）。

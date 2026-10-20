@@ -676,6 +676,7 @@ Open-Meteo の天気コード（WMO の天気コード）を、アプリで扱�
 - GitHub Actions：`permissions` は最小限（既定は `contents: read`）、外部 Action はバージョンを固定。
 - main のブランチ保護：Rulesets で、削除と force push を禁止し、PR（承認 0）と `ci` の成功を必須にした。管理者も例外にしない（2026-10-20、#2・Issue #53。設定と確かめた結果は `docs/security-settings.md`）。
 - シークレット混入対策：GitHub の Secret Protection（secret scanning）と Push protection を有効にした（2026-10-16、#19。リポジトリは public。状態の記録は `docs/security-settings.md`）。CI で gitleaks が全履歴を検査する。
+- 脆弱性の報告の窓口：リポジトリの直下の `SECURITY.md` に、GitHub の非公開の脆弱性報告（Private vulnerability reporting）で報告してもらうことと、返事の目安（受け取り 7 日、判断 30 日）を書き、非公開の脆弱性報告を有効にした（2026-10-20、Issue #55。#24 の Scorecard の Security-Policy への対応。メールアドレスは公開しない。設定の記録は `docs/security-settings.md`）。
 - 配布したイメージの出どころ：CD で push したイメージに、ビルドの来歴と SBOM（SPDX 2.3）の attestation を `actions/attest` で付ける（#22）。GitHub Free・Pro・Team では public のリポジトリでしか使えないので、**リポジトリを private に戻すと CD が失敗する**（Enterprise Cloud が要る）。パッケージは private のままで使える。手元からの検証の手順と記録は `docs/provenance.md`。
 - 動いている API への攻撃の検査（DAST）：CD で、外部と通信できない API のコンテナに OWASP ZAP の API スキャン（`/openapi.json`）をかけ、High の警告があれば push しない（#23）。初回の結果と対応、手元での実行の手順は `docs/dast.md`。
 - リポジトリ全体の対策の点数：OpenSSF Scorecard を週 1 回と main への push で実行し、結果を Security タブ（コードスキャン）と `api.scorecard.dev` に送る（#24）。点が低くても失敗にしない。初回の点数（5.3）、点の低い項目への対応、見つけられないこと（ワークフロー全体の write の権限）は `docs/scorecard.md`。

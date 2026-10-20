@@ -94,3 +94,22 @@ CI が壊れて誰もマージできなくなったとき：
 - PR #65 のアラート #10 は PR の ref（`refs/pull/65/merge`）にだけ付き、main のアラート（`state=open`）は 0 件のまま。
 - 人間が Security タブ（Code scanning）で、ツール CodeQL の結果が出ていることを見る（AI は画面を見られない）。
 - リポジトリを private に戻すと、GitHub Code Security のライセンスがないと CodeQL は動かない（spec 11 章）。
+
+## 脆弱性の報告の窓口（Issue #55）
+
+設定した日：2026-10-20。人間が設定画面（Settings → Code security →「Advanced Security」の Private vulnerability reporting の Enable）で有効にし、AI が `gh api` で読んで確かめた。窓口の案内はリポジトリの直下の `SECURITY.md`。
+
+たとえると、工場の入口の「不具合を見つけた方へ」の掲示（`SECURITY.md`）と、鍵のかかった投書箱（非公開の脆弱性報告）。投書は持ち主と管理者だけが読める。
+
+| 項目 | 値 | 確かめ方 |
+|---|---|---|
+| 非公開の脆弱性報告 | `{"enabled": true}` | `gh api repos/.../private-vulnerability-reporting`（設定の前は `false`） |
+| CodeQL の default setup | `not-configured` のまま | `gh api repos/.../code-scanning/default-setup`（同じ画面の別のボタンを押していないことの確認。#54 のワークフローとぶつかるため） |
+| secret scanning・Push protection | `enabled` のまま | `gh api repos/...` の `security_and_analysis` |
+| Security タブの Overview | Private vulnerability reporting「Enabled」、Security policy「Disabled」 | 人間のスクリーンショット。Security policy は、`SECURITY.md` が main に入る前なので Disabled（マージ後に GraphQL で確かめる） |
+| 通知（Watch） | Custom で「Security alerts」だけにチェック | 人間のスクリーンショット（Apply の前の画面）と、人間の「出来ました」。AI は `gh` のトークンに `notifications` の権限がないので読めない |
+
+- 報告が来たとき管理者に通知が届くのは、リポジトリを「All activity」で watch しているか、「Security alerts」を購読しているとき（GitHub の公式の文書の原文を `github/docs` から取得して読んだ）。
+- 報告する人の画面（Report a vulnerability のフォーム）は確かめていない。持ち主が開くと持ち主の画面になるため。有効になっていることは、上の `gh api` と Overview で確かめた。
+- 報告が来たら、Security タブの Advisories で非公開のまま扱う。内容を dev-log・Issue・コミットに書かない。
+- 止めるときは、同じ画面の Disable を押す。`SECURITY.md` の案内と食い違うので、止めるなら `SECURITY.md` も直す。
