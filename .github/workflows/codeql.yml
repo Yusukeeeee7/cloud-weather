@@ -1,0 +1,58 @@
+name: CodeQL
+
+# 自分のコードの危ない書き方の検査（SAST、#18 の残り、Issue #54）。結果は Security タブ（コードスキャン）に出る。
+# 入力の値が、ファイルを開く・画面に HTML として書くなどの危ない場所まで届いていないかを追いかける。
+# Scorecard の SAST は、ワークフローの github/codeql-action/analyze を数える（default setup では数えない）。
+# public のリポジトリなので無料。private に戻すと、GitHub Code Security のライセンスがないと動かない。
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# PR では、同じ PR の古い実行を止める。main への push の実行は止めない（main の結果を残す）。
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # ジョブで指定すると、書かなかった権限は none になる。contents も書く。
+    # actions: read・packages: read は、private のリポジトリや private の CodeQL パックのときだけ要る（公式のひな形）。
+    permissions:
+      contents: read
+      # 解析の結果を Security タブ（コードスキャン）に送る。
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # python は app/・ml/ など、javascript-typescript は画面の JS（app/static/）。
+        # actions は zizmor・actionlint（ci.yml）が見ているので入れない。
+        language:
+          - python
+          - javascript-typescript
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # scorecard.yml の upload-sarif と同じ版（Dependabot がまとめて上げる）。
+      # どちらもビルドの要らない言語なので build-mode は none。クエリは既定の組。
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: "/language:${{ matrix.language }}"
