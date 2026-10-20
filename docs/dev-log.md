@@ -2764,3 +2764,96 @@ AI の誤りではないが記録しておくこと：
 - 人間の学び：（要記入）
 
 ---
+
+### 2026-10-20 #24 の残り：SECURITY.md（脆弱性の報告の窓口）（Issue #55 / PR #67、記録 PR #68）
+
+**指示したこと（プロンプトの要約）**
+- `/plan-feature issue #55を進めたいです`（機能番号は渡していない。spec 14 章に当てはまる行がないので、AI が #24 の残りとして扱う案を質問 1 にした）。
+- 計画への回答：「全部おすすめで進めてください」（質問 1〜7）。
+- `/implement-feature 24 55` →（シナリオ 0・1 の Red を示して止まった後）「実装へ進んで」。
+- 非公開の脆弱性報告を有効にした画面のスクリーンショットを付けて「これだけでいいの？」。
+- Security タブの Overview のスクリーンショットを付けて「これはでてます」「通知の設定がよくわからん」。
+- Watch の Custom の画面のスクリーンショットを付けて「出来ました」「あのSecurity and qualityのスクショは送って大丈夫だった？」。
+- `/review` →「おすすめで」（🟡 1 つ・🟢 3 つをすべて直す）→「マージしました」（PR #67）→「マージしました /dev-log」（PR #68）。
+
+**渡したコンテキスト**
+- CLAUDE.md / 使った skill：CLAUDE.md（自動読み込み）、メモリ（シェル環境）、`/plan-feature`、`/implement-feature`（#54 の dev-log で足した 3 つの決まりを含む）、`/review`、`/dev-log`
+- 明示したファイル：なし（Issue 番号だけ。AI が Issue #55 の本文、`docs/scorecard.md`、spec の 11・14 章、`docs/security-settings.md` を読んだ）
+- 人間のスクリーンショット 3 枚：設定画面の「Private vulnerability reporting」（Disable のボタン＝有効）、Security タブの Overview、Watch の Custom の画面
+- 公式の情報（どれも `gh api` で原文を取得して読んだ。要約ではない）：
+  - Scorecard の `docs/checks.md` の Security-Policy の節と、v5.6.0 のソース（`checks/evaluation/security_policy.go`、`checks/raw/security_policy.go`、`probes/securityPolicyContainsLinks`・`ContainsText`・`ContainsVulnerabilityDisclosure`）
+  - `github/docs` の `configure-vulnerability-reporting/add-security-policy.md`・`configure-for-a-repository.md` と、使われている reusables（報告する人の画面、通知の条件、API）
+- 足りなかった・余計だった情報：
+  - 報告の URL（`/security/advisories/new`）の形は、公式の文書の原文に出てこなかった。ログインしていない `curl` で、ログインのページへの 302（存在しない道は 404）を見て、GitHub にある道だと確かめた。
+  - いまの画面のタブの名前（「Security and quality」）は、人間のスクリーンショットで初めて分かった。
+
+**TDD**
+- この機能は文書と GitHub の設定なので、pytest のテストではなく、確かめのシナリオ 0〜6 にした（計画のテスト一覧）。
+- 先に書いたテスト：シナリオ 0（`private-vulnerability-reporting`、GraphQL の `isSecurityPolicyEnabled`）と、シナリオ 1 の数え方のスクリプト（Scorecard v5.6.0 の `collectPolicyHits` の正規表現を Python に写したもの。作業用のフォルダに置き、リポジトリには入れていない）。
+- Red を確認したか：はい。`enabled: false`、`isSecurityPolicyEnabled: false`・`securityPolicyUrl: null`、スクリプトは「SECURITY.md がない」で終了コード 1。
+- 最初の実装で通ったか：はい（`SECURITY.md` は 1 回目でスクリプトの条件をすべて満たした：URL 2、メール 0、`Vuln`・`Disclos`・数字の合計 15、見込み 10 点）。`/review` の後に文言を 3 か所直した（下の誤りの表）。
+- 実装をわざと壊す確認（skill の手順 7）：スクリプトに、URL を消したもの（4 点で FAIL）、メールを足したもの（FAIL）、URL だけのもの（6 点で FAIL）を読ませ、3 通りとも検出した。
+- シナリオ 2：人間が有効にした後、`enabled: true`、CodeQL の default setup は `not-configured` のまま、secret scanning などは変わらず。
+- シナリオ 3：計画どおりにはできなかった（下の誤りの表）。Overview のスクリーンショットと `gh api` で代えた。
+- シナリオ 4：マージ後の GraphQL で `isSecurityPolicyEnabled: true`、`securityPolicyUrl` は `https://github.com/Yusukeeeee7/cloud-weather/security/policy`。
+- シナリオ 5：マージ後の Scorecard（run 39438060523）は 1 回目が失敗（GitHub の GraphQL のエラー）、再実行の 2 回目で成功。Security-Policy 0 → 10、合計 5.9 → 6.4。計画の見込み（10）のとおり。
+- シナリオ 6：手元の ruff、Docker（`Dockerfile.dev`）の中の mypy（53 ファイルで問題なし）と pytest（2,035 件成功、カバレッジ 99.64 %）が通った（`/review` のとき）。アプリのコードは変えていない。
+
+**AIの誤り・ハルシネーション**
+| 内容 | 気づいた仕組み | 修正 | 再発防止 |
+|---|---|---|---|
+| **`SECURITY.md` に、画面のタブの名前を記憶で「Security」と書いた**。いまの画面は「Security and quality」で、人間のスクリーンショット（Overview）に写っていたのに、その後も直していなかった | `/review`（AI 自身） | 「Security and quality（Security）タブ → 左の Advisories」に直した（公式の文書では、ボタンは Advisories のページにある） | 人が読む案内に画面の名前を書くときは、公式の文書か、いまの画面で確かめる。スクリーンショットをもらったら、すでに書いた文と照らす |
+| **計画のシナリオ 3 に「人間が報告の URL を開き、報告のフォームが出ることを見る」と書いた**。持ち主が開くと持ち主の画面になる可能性があり、報告する人の画面は持ち主から見られないことに、計画のときに気づかなかった | 人間が Overview のスクリーンショットを送ったとき（AI が気づいた） | Overview と `gh api` で代え、「報告する人の画面は確かめていない」と記録した。URL は、ログインしていない `curl` の 302／404 で、道があることだけを確かめた | 「見る人によって画面が変わる」もの（持ち主と外の人など）は、誰の画面で確かめるかを計画に書く |
+| 計画の「間違えやすいこと」に「CodeQL の default setup を有効にすると、ワークフローの解析の結果の送信が断られる見込み」と書いたが、根拠の文書を読んでいない | 書いたときに AI 自身が「確かめていない」と付けた | 押さないようにお願いするための注意として残し、「見込み（確かめていない）」と明記した | 確かめていない理由は、確かめていないと書く（今回は書いた） |
+| `SECURITY.md` の「報告の内容は、持ち主と管理者だけが見られます」で、報告した本人を書き落とした。イメージを対象に書いたが、パッケージが非公開であることを書かなかった | `/review`（AI 自身） | 「報告した方と、持ち主・管理者」「パッケージは非公開」に直した | 外の人向けの文書は、外の人から見えるか・何ができるかで読み直す |
+| シナリオ 1 のスクリプトを `python -I` で実行し、`PYTHONUTF8=1` が効かず、日本語の出力が文字化けした（`-I` は環境変数を無視する） | 出力を見て（AI 自身） | `python -X utf8` に替えた。結果の判定には影響なし | `-I` で日本語を出すときは `-X utf8` を使う |
+| （#54 の `/dev-log` の続きの作業で）skill の変更を記録するコマンドの先頭に、不要な空の `python - <<'EOF'` を入れ、Python が対話モードで止まり、後ろの手順が実行されなかった | 120 秒で止まり、出力に Python の対話モードのエラーが並んだ（AI 自身） | 止めて、ファイルが変わっていないことを確かめ、Edit ツールで直した | 1 つのコマンドに、試しの行を残さない |
+
+- 誤りではないが記録すること：
+  - **マージ後の 1 回目の Scorecard が失敗した**（`ListCommits:error during graphqlHandler.setup: internal error: githubv4.Query: Something went wrong while executing your query`）。前に成功した実行（run 39430900807）のログと比べて、違うのはこの行だけ（「Publication enabled: false」は成功した実行にもある）と確かめてから、**人間に聞かずに** `gh run rerun --failed` で再実行した。2 回目で成功した。ワークフローは変えていない。
+  - 人間の「スクリーンショットを送って大丈夫だった？」には、写っていたもの（public の情報、機能の有効・無効、Code scanning の件数だけ）を挙げて、シークレットや報告の中身はないと答えた。スクリーンショットはリポジトリに入れていない。
+  - Overview で Dependabot alerts が Disabled だった。#2 の dev-log の申し送り（有効にしたかの記録がない）と関係するので、人間に「別の Issue にするなら」と伝えた。この Issue では触っていない。
+  - 通知の設定（Watch）は、`gh` のトークンに `notifications` の権限がなく AI からは読めなかった。権限は足さず、人間のスクリーンショット（Apply の前の画面）と「出来ました」で記録した。
+  - #54 の dev-log と skill の変更は、決めたとおり別のコミット（`948c05b`）にし、PR #67 の本文に書いた。
+- 人間が気づいた誤りで、会話に出ていないもの：（要記入）
+
+**セキュリティ上の確認**
+- `SECURITY.md` にメールアドレス・個人の情報・シークレットを書いていない（シナリオ 1 のスクリプトでメール 0、CI の gitleaks も成功）。窓口は GitHub の非公開の脆弱性報告だけ。
+- リポジトリの設定は、AI は書き込んでいない（`gh api` は GET と GraphQL の読み取りだけ）。非公開の脆弱性報告と Watch は人間が画面で設定した。
+- 同じ画面の CodeQL の default setup が押されていないことを `gh api` で確かめた（#54 のワークフローとぶつからない）。
+- 報告が来たら、Security タブの Advisories で非公開のまま扱い、内容を dev-log・Issue・コミットに書かない（`docs/security-settings.md` に書いた）。
+- 依存パッケージの追加はない。アプリのコード・ワークフローは変えていない。
+- 外部通信：
+  - アプリから・テストから：0 回。
+  - GitHub：`gh api` の GET（Issue、リポジトリ、`private-vulnerability-reporting`、`code-scanning/default-setup`、`community/profile`、`subscription`（権限がなく失敗）、check run、`ossf/scorecard` のソースと文書、`github/docs` の木と文書）、GraphQL の読み取り 3 回、`gh pr create` 2 回（#67・#68）、`gh pr edit` 1 回（#67 の本文）、`gh run rerun --failed` 1 回、`gh run list`・`gh run view`・`gh pr view` を数回。`git push` 4 回（`feature/issues_55` 3 回、`-verify` 1 回）と、この記録の push。
+  - `curl` で `github.com` の報告の URL 4 回（ログインしていない状態で、302／200／404 を見た）、`api.scorecard.dev` 2 回。
+  - Docker：`Dockerfile.dev` のビルドと、その中での mypy・pytest（`--network none`）。
+- 破壊的な操作：force push・ブランチ削除・履歴の書き換え・`rm -rf` はしていない。
+- コミットは、ファイルを名前で指定して add した。コミットの前に `git status` と `git branch --show-current` を見た。
+
+**コスト**
+- Claude 利用量：（要記入）
+- GitHub Actions の実行回数・時間（`gh run list` の開始と更新の時刻の差）：
+  - PR #67：`920a3e4` CI 1 分 57 秒（run 39434450185）・CodeQL 1 分 4 秒（run 39434450234）、`b7cc9c3` CI 2 分 30 秒（run 39436311316）・CodeQL 1 分 4 秒（run 39436311320）、`e17b97e` CI 2 分 29 秒（run 39437534407）・CodeQL 1 分 0 秒（run 39437534444）。すべて成功。`948c05b` は `920a3e4` と一緒に push したので、単独の実行はない。
+  - マージ後（`24558a7`）：CodeQL 1 分 15 秒（成功、run 39438060448）、CD 5 分 34 秒（成功、run 39438060668）、Scorecard（run 39438060523）は 1 回目 18 秒（失敗）、2 回目のジョブ 36 秒（成功）。
+  - PR #68（`5fc84ac`）：CI 2 分 26 秒（run 39440455962）、CodeQL 1 分 6 秒（run 39440456066）。どちらも成功。
+  - PR #68 のマージ後（`7900c5f`）の Scorecard・CD・CodeQL（run 39442650986・39442650914・39442650904）：この記録を書いた時点では実行中：（要記入）
+  - この記録を入れる PR の CI・CodeQL：（要記入）
+- 外部API呼び出し：上の「外部通信」のとおり（アプリからは 0 回）。
+
+**学び・CLAUDE.md / skills への反映**
+- Scorecard の Security-Policy は、文書の中身の質ではなく、URL・文章の量・決まった言葉と数字を正規表現で数えている。数え方をソースから写したスクリプトで、マージ前に点の見込みを確かめられた（見込みどおり 10 点）。点のためではなく、報告する人に要ることを書き、それが条件にも当たる形にした。
+- GitHub の画面は、見る人（持ち主・外の人）で変わる。外の人向けの機能は、持ち主の画面では確かめきれない。
+- 外部のサービス（GitHub の API）の一時的なエラーで、ワークフローが失敗することがある。設定の問題かどうかは、成功した実行のログと比べて判断した。
+- 変更案（人間の指示「おすすめで進めてください」で、4 つとも反映した。2026-10-20。skill の変更と dev-log のコミットは次の Issue のブランチで行う）：
+  - `plan-feature`：手順 3 に「人に確かめてもらうシナリオでは、誰の画面（持ち主・外の人）で見るかを書く。持ち主から見えないものは、代わりの確かめ方を書く」を足す（今回のシナリオ 3）。
+  - `plan-feature`：手順 3 に「人が読む文書（`SECURITY.md` など）に画面の名前を書くときは、公式の文書かいまの画面で確かめる」を足す（今回のタブの名前）。
+  - `implement-feature`：手順 7 に「ワークフローが外部のサービスのエラーで失敗したときは、成功した実行のログと比べて原因を確かめてから再実行する。再実行したことを記録に書く」を足す（今回の Scorecard の 1 回目）。
+  - メモリ（シェル環境。リポジトリの外）：「`python -I` は `PYTHONUTF8` を無視する。日本語を出すときは `-X utf8`」を足す。
+- 申し送り：
+  - Dependabot alerts が Disabled（Overview で見た）。有効にするかは、別の Issue で決める。
+  - ライセンス（#56）は、持ち主が決めること（`docs/scorecard.md`）。
+  - Issue #55 は PR #68 のマージで閉じた（`gh issue view 55` で `CLOSED` を確かめた）。
+- 人間の学び：（要記入）
+
+---
