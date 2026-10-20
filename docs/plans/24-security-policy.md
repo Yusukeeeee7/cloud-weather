@@ -171,4 +171,6 @@ spec 14 章には、この作業の行がない。Scorecard（#24）で決めた
 - **#54 の記録の別のコミット**（質問 7）：`948c05b`（#54 の dev-log と `implement-feature` の変更）。この Issue の `SECURITY.md` は `920a3e4`。
 - **シナリオ 1 の数え方のスクリプト**：作業用のフォルダに置き、リポジトリには入れていない。Go の `\b*` は Python では `(?:\b)*` と書いた。結果：URL 2 つ、メール 0、`Vuln`・`Disclos`・数字の合計 15、見込み 10 点。わざと壊した 3 通り（URL を消す → 4 点で FAIL、メールを足す → FAIL、URL だけ → 6 点で FAIL）を検出した。
 - **シナリオ 3 は計画どおりにできなかった**：人間が送ったのは報告のフォームではなく、Security タブの Overview（Private vulnerability reporting が Enabled）。持ち主が報告の URL を開くと、持ち主の画面になる可能性があり（確かめていない）、報告する人の画面は持ち主からは見られない。Overview と `gh api` で代え、`docs/security-settings.md` にそう書いた。
+- **テストへの影響**：実装のとき、`tests/`・`app/`・`ml/`・`scripts/` を `security.md`・`advisories` で検索して 0 件だった（`grep` の終了コード 1）。
+- **`/review` の後の変更**：`SECURITY.md` のタブの名前を、いまの画面（人間のスクリーンショット）に合わせて「Security and quality（Security）タブ → 左の Advisories」にした（公式の文書では、ボタンは Advisories のページにある）。イメージの行に「パッケージは非公開」、報告を見られる人に「報告した方」を足した。報告の URL は、ログインしていない `curl` で `login?return_to=.../security/advisories/new` への 302（存在しない道は 404）なので、GitHub にある道だと確かめた。ログインした報告する人にフォームが出るかは確かめていない。
 - **通知**（計画の「人間にお願いする設定」）：`gh api repos/.../subscription` は、トークンに `notifications` の権限がなく読めなかった（権限は足していない）。人間が Watch を Custom の「Security alerts」だけにした（スクリーンショット）。

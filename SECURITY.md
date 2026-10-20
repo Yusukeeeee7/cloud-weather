@@ -6,7 +6,7 @@
 ## 対象
 
 - このリポジトリのコード：API（`app/`）、画面（`app/static/`）、`ml/`、ノートブック、`scripts/`、GitHub Actions のワークフロー、Dockerfile
-- CD が ghcr.io に push するイメージの最新（`latest`）
+- CD が ghcr.io に push するイメージの最新（`latest`。パッケージは非公開）
 
 古いイメージや過去のコミットは直しません。最新の main で直します。
 
@@ -16,7 +16,7 @@
 
 GitHub の非公開の脆弱性報告を使ってください。
 
-1. リポジトリの **Security** タブを開く
+1. リポジトリの **Security and quality**（Security）タブを開き、左の **Advisories** を選ぶ
 2. **Report a vulnerability** を押す
    （https://github.com/Yusukeeeee7/cloud-weather/security/advisories/new ）
 3. 次のことを書く
@@ -24,7 +24,7 @@ GitHub の非公開の脆弱性報告を使ってください。
    - 再現の手順
    - 影響（何ができてしまうか）
 
-報告の内容は、持ち主と管理者だけが見られます。
+報告の内容は、報告した方と、持ち主・管理者だけが見られます。
 
 ## 対象外
 
