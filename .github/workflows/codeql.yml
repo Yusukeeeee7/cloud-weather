@@ -2,7 +2,8 @@ name: CodeQL
 
 # 自分のコードの危ない書き方の検査（SAST、#18 の残り、Issue #54）。結果は Security タブ（コードスキャン）に出る。
 # 入力の値が、ファイルを開く・画面に HTML として書くなどの危ない場所まで届いていないかを追いかける。
-# Scorecard の SAST は、ワークフローの github/codeql-action/analyze を数える（default setup では数えない）。
+# Scorecard の SAST は、ワークフローに github/codeql-action/analyze があると高い点になる
+# （default setup だと、マージした PR の割合だけで点が決まる）。
 # public のリポジトリなので無料。private に戻すと、GitHub Code Security のライセンスがないと動かない。
 on:
   pull_request:

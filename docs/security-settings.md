@@ -86,7 +86,7 @@ CI が壊れて誰もマージできなくなったとき：
 | 0 | 入れる前に `GET code-scanning/analyses?tool_name=CodeQL`・`alerts?tool_name=CodeQL` | どちらも 0 件（コードスキャンには Scorecard の解析 21 件だけ） |
 | 1 | 手元の Docker で、CI と同じ actionlint・zizmor | どちらも指摘なし |
 | 2 | 入れた PR #64（コミット `7f6933e`） | `Analyze (python)`・`Analyze (javascript-typescript)`（run 39425225068）が成功。`CodeQL`（`github-advanced-security`）も `success`。解析が 2 つの category で 1 つずつでき、指摘は **0 件** |
-| 3 | わざと危ない書き方を入れた PR #65（ブランチ `feature/issues_54-fail`、コミット `3c060ab`） | `app/routers/health.py` に、API の入力 `path` をそのまま `Path(path).read_text()` に渡す道を足した。`CodeQL` が `failure`（「1 new alert including 1 high severity security vulnerability」）、アラート #10 `py/path-injection`（重大度 error、セキュリティの重大度 high）が 22 行目に出た。`ci` は成功。マージせずに閉じ、ブランチは残した |
+| 3 | わざと危ない書き方を入れた PR #65（ブランチ `feature/issues_54-fail`、コミット `3c060ab`） | `app/routers/health.py` に、API の入力 `path` をそのまま `Path(path).read_text()` に渡す道を足した。`Analyze (python)`（run 39425694014）は成功し、`CodeQL` が `failure`（「1 new alert including 1 high severity security vulnerability」）、アラート #10 `py/path-injection`（重大度 error、セキュリティの重大度 high）が 22 行目に出た。`ci` は成功。マージせずに閉じ、ブランチは残した |
 | 4 | 初回の既存の指摘 | 0 件（シナリオ 2）。直すものも、閉じるものもなかった |
 
 - PR #65 のアラート #10 は PR の ref（`refs/pull/65/merge`）にだけ付き、main のアラート（`state=open`）は 0 件のまま。
