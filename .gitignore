@@ -10,3 +10,6 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# 自分用の全体ガイド（GitHub に上げない）
+docs/overview.local.md
